@@ -1,0 +1,13 @@
+.vs/
+bin/
+obj/
+x64/
+x86/
+Debug/
+Release/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vsidx
+*.ipch
