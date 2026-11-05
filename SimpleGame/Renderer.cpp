@@ -88,6 +88,7 @@ Renderer::~Renderer()
 {
 	for (int i = 0; i < FONT_COUNT; ++i) m_Fonts[i].Destroy();
 	m_Atlas.Destroy();
+	if (m_SpriteTex) glDeleteTextures(1, &m_SpriteTex);
 
 	DestroyTarget(&m_Scene);
 	DestroyTarget(&m_BloomA);
@@ -126,6 +127,7 @@ void Renderer::Initialize(int windowSizeX, int windowSizeY)
 	m_sSeeThru      = glGetUniformLocation(m_ShapeProg, "u_SeeThru");
 	m_sSeeThruShape = glGetUniformLocation(m_ShapeProg, "u_SeeThruShape");
 	m_sTex          = glGetUniformLocation(m_ShapeProg, "u_Tex");
+	m_sSprite       = glGetUniformLocation(m_ShapeProg, "u_Sprite");
 
 	CreateVertexBufferObject();
 	CreateShapeVAO();
@@ -645,6 +647,12 @@ void Renderer::BindShapeState(GLuint instanceVBO, float offX, float offY, float 
 	glBindTexture(GL_TEXTURE_2D, m_Atlas.Texture());
 	glUniform1i(m_sTex, 0);
 
+	// 스프라이트 아틀라스는 유닛 1. 없어도 바인딩은 해 둔다 (0 = 빈 텍스처)
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, m_SpriteTex);
+	if (m_sSprite >= 0) glUniform1i(m_sSprite, 1);
+	glActiveTexture(GL_TEXTURE0);
+
 	glBindVertexArray(m_ShapeVAO);
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
 
@@ -660,6 +668,9 @@ void Renderer::UnbindShapeState()
 {
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -836,6 +847,50 @@ void Renderer::DrawFlame(float cx, float cy, float w, float h,
 	Col c(1.0f, 1.0f, 1.0f, alpha);
 	Submit(6, cx, cy, w, h, c, c, 0.0f, 0.0f,
 		time != 0.0f ? time : 1e-6f, intensity, 0.0f, 0);
+}
+
+// -----------------------------------------------------------------------------
+// Sprites
+// -----------------------------------------------------------------------------
+
+bool Renderer::SetSpriteAtlas(const unsigned char* rgba, int w, int h)
+{
+	if (!m_Initialized || rgba == 0 || w <= 0 || h <= 0) return false;
+
+	// 큐에 쌓인 스프라이트가 옛 텍스처로 그려지지 않게 먼저 내보낸다
+	Flush(FLUSH_FRAME_END);
+
+	if (m_SpriteTex == 0) glGenTextures(1, &m_SpriteTex);
+	glBindTexture(GL_TEXTURE_2D, m_SpriteTex);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+	// 아틀라스는 2~3배로 구워서 1배로 줄여 그린다. 밉맵이 없으면 축소에서
+	// 지글거린다. 프레임 사이 여백(패커가 4px)이 밉 레벨 2 까지 번짐을 막는다.
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 2);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	GLenum err = glGetError();
+	if (err != GL_NO_ERROR)
+	{
+		std::cout << "Renderer: sprite atlas upload failed (GL " << err << ").\n";
+		glDeleteTextures(1, &m_SpriteTex);
+		m_SpriteTex = 0;
+		return false;
+	}
+	PROFILE_GAUGE("render.sprite_atlas_mb", (double)w * h * 4.0 * 1.33 / (1024.0 * 1024.0));
+	return true;
+}
+
+void Renderer::DrawSprite(float cx, float cy, float w, float h, const float* uv,
+	const Col& tint)
+{
+	if (m_SpriteTex == 0) return;
+	Submit(8, cx, cy, w, h, tint, tint, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, uv);
 }
 
 // -----------------------------------------------------------------------------

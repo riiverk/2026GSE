@@ -6,6 +6,7 @@
 //   0 rounded rect   1 ellipse   2 diamond   3 triangle
 //   4 text glyph (atlas)  5 water tile        6 flame
 //   7 bowl (lower half of an ellipse, flat edge on top)
+//   8 sprite (RGBA atlas baked in Blender, straight alpha)
 //
 // Everything that used to be a uniform is now per-instance data handed over
 // by the vertex shader as flat varyings.
@@ -24,6 +25,7 @@ flat in float v_Alpha;
 layout(location = 0) out vec4 FragColor;
 
 uniform sampler2D u_Tex;    // glyph atlas, single channel
+uniform sampler2D u_Sprite; // sprite atlas, RGBA
 uniform vec4      u_Haze;   // rgb, strength
 
 float sdRoundRect(vec2 p, vec2 half_, float r)
@@ -86,6 +88,20 @@ void main()
 	{
 		float a = texture(u_Tex, v_TexUV).r;
 		FragColor = vec4(v_ColorA.rgb, v_ColorA.a * a * v_Alpha);
+		return;
+	}
+
+	// ---- sprite ----------------------------------------------------------------
+	// The sprite already carries its own lighting from Blender. Only the tint,
+	// the aerial haze and the see-through fade are applied here, so a sprite
+	// behaves like the SDF props around it.
+	if (shape == 8)
+	{
+		vec4 t = texture(u_Sprite, v_TexUV);
+		if (t.a < 0.004) discard;
+		vec3 c = t.rgb * v_ColorA.rgb;
+		c = mix(c, u_Haze.rgb, v_Haze);
+		FragColor = vec4(c, t.a * v_ColorA.a * v_Alpha);
 		return;
 	}
 

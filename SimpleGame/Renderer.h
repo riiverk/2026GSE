@@ -226,6 +226,19 @@ public:
 	void DrawFlame(float cx, float cy, float w, float h,
 		float time, float intensity, float alpha);
 
+	// ---- sprites (블렌더에서 구운 아틀라스) ------------------------------------
+	// 아틀라스는 하나. 글리프 아틀라스와 다른 텍스처 유닛에 묶여 있어서 텍스트와
+	// 스프라이트가 같은 인스턴스 배치에 섞여도 배치가 끊기지 않는다.
+	// rgba 는 스트레이트 알파, 첫 행이 위. 업로드 후 호출부는 사본을 버려도 된다.
+	bool SetSpriteAtlas(const unsigned char* rgba, int w, int h);
+	bool HasSpriteAtlas() const { return m_SpriteTex != 0; }
+
+	// (cx, cy) 사각형 중심, w x h px. uv = 아틀라스 u0, v0, u1, v1 (u0 > u1 이면
+	// 좌우 반전). tint 는 곱해진다 (집마다 색을 조금씩 다르게, 페이드 등).
+	// 회전·흔들림·앵커(대기 원근, 비침)는 다른 도형과 똑같이 걸린다.
+	void DrawSprite(float cx, float cy, float w, float h, const float* uv,
+		const Col& tint);
+
 	// ---- recording / replay ------------------------------------------------
 	// Between BeginRecord and EndRecord, Draw* appends raw instances to `out`
 	// instead of the queue: no world zoom, time relative to the frame time.
@@ -343,7 +356,7 @@ private:
 	GLuint m_ShapeProg = 0;
 	GLint  m_sScreen = -1, m_sOffset = -1, m_sScale = -1, m_sTime = -1,
 		m_sHaze = -1, m_sHazeZoom = -1, m_sSeeThru = -1, m_sSeeThruShape = -1,
-		m_sTex = -1;
+		m_sTex = -1, m_sSprite = -1;
 
 	// Sticky state copied into each instance
 	float m_WorldScale = 1.0f;
@@ -392,5 +405,6 @@ private:
 	bool   m_QueriesReady = false;
 
 	GlyphAtlas m_Atlas;
+	GLuint     m_SpriteTex = 0;
 	KoreanFont m_Fonts[FONT_COUNT];
 };

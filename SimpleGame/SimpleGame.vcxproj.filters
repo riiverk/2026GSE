@@ -30,6 +30,9 @@
     <ClInclude Include="Renderer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="SpriteAtlas.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="Game.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -63,6 +66,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Renderer.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="SpriteAtlas.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="Game.cpp">

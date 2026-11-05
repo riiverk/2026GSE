@@ -170,6 +170,8 @@
     <ClInclude Include="KoreanFont.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="SceneGraph.h" />
+    <ClInclude Include="SpriteAtlas.h" />
+    <ClInclude Include="Dependencies\stb_image.h" />
     <ClInclude Include="Sim\SimData.h" />
     <ClInclude Include="Sim\SimGgd.h" />
     <ClInclude Include="Sim\SimMonitor.h" />
@@ -192,6 +194,9 @@
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="SceneGraph.cpp" />
     <ClCompile Include="SimpleGame.cpp" />
+    <ClCompile Include="SpriteAtlas.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <ClCompile Include="Sim\SimData.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
@@ -224,6 +229,7 @@
     <None Include="Data\Sim\npcs.ggd" />
     <None Include="Data\Sim\world.ggd" />
     <None Include="Tools\monitor.html" />
+    <None Include="Data\Sprites\sprites.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
