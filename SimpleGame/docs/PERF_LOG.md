@@ -138,6 +138,7 @@
 | `render.flush.frame_end` | counter | 프레임 끝 (FinishFrame) | 정상 1 |
 | `render.flush.static_batch` | counter | 정적 배치 앞에서 큐를 비운 횟수 | 0 이 정상. 늘면 정적 배치 사이에 동적 도형이 끼었다 |
 | `render.flush.capacity` | counter | 큐가 65,536 을 넘어 중간에 비움 | 0 이 정상 |
+| `render.sprite_atlas_mb` | gauge | 블렌더 스프라이트 아틀라스 GPU 메모리 (밉맵 포함 추정, 시작 시 1회) | 4096x1024 기준 약 21 MB. 64 MB 를 넘기면 아틀라스를 지역별로 나눈다 |
 | `render.flush.terrain` | counter | 지형 앞에서 큐를 비운 횟수 | 0 이 정상 (지형은 프레임 맨 처음) |
 | `render.terrain` | scope | 곡선 지형 그리기 제출 (CPU 쪽). GPU 비용은 `gpu.scene_ms` 에 포함 | |
 | `render.flush` | scope | 큐 업로드 + 인스턴스 draw 제출 | |
