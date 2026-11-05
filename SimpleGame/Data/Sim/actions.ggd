@@ -1,0 +1,303 @@
+﻿# actions.ggd — NPC 행동 (STORY_SIM.md 15.9)
+# score = base + wGreed*욕망 + wPrinciple*규범 + wBold*기질 (+20 goal 일치), 10% 흔들림
+#
+# 명세에 없는 키 두 개를 쓴다 (화면 쪽 힌트, Sim 로직에는 영향 없음)
+#   name      표시 이름
+#   behavior  일과 층에서 그 NPC 가 오늘 어떻게 움직이는지
+#             stay wander hunt patrol rob trade travel stalk scheme gossip
+# 인코딩 UTF-8 BOM
+
+[action idle]
+name = 쉬기
+behavior = stay
+base = 5
+
+[action hunt]
+name = 사냥
+behavior = hunt
+base = 8
+wBold = 2
+
+[action sell]
+name = 장사
+behavior = trade
+base = 6
+
+[action tend_village]
+name = 마을 돌보기
+behavior = wander
+base = 6
+effect = add region:home.unrest -1
+
+[action guard_lake]
+name = 호수 지키기
+behavior = patrol
+base = 6
+wPrinciple = 2
+# 주민 평판이 쌓였을 때만 호수를 지킨다 (플레이어가 마을을 움직인 결과)
+cond = plan:bt_starscale.state == 1 && faction:villagers.rep >= 40
+effect = add plan:bt_starscale.progress -1
+
+[action investigate]
+name = 조사
+behavior = wander
+base = 6
+wPrinciple = 3
+goal = find_traitor
+cond = !flag:seraphine_exposed
+effect = add npc:@self.mark 1
+
+[action rig_exam]
+name = 심사 조작
+behavior = stay
+base = 8
+wGreed = 2
+wPrinciple = -3
+goal = rig_exam
+cond = plan:chilsung_exam.state == 1 && !flag:seraphine_exposed
+effect = flag exam_rigged 3
+
+[action recruit]
+name = 포섭
+behavior = scheme
+base = 6
+wGreed = 2
+cond = faction:black_table.treasury >= 5
+# 탐욕 +1 이상이고 플레이어와 적대인 NPC 하나를 포섭 (Sim 내장 효과)
+effect = recruit_hostile; add faction:black_table.treasury -1
+
+[action train]
+name = 수련
+behavior = stay
+base = 8
+goal = chilsung
+effect = log valentin_train
+
+[action show_off]
+name = 과시
+behavior = wander
+base = 5
+wBold = 2
+cond = npc:@self.band <= 0
+effect = add npc:@self.meter -1
+
+[action patrol_sea]
+name = 바다 순찰
+behavior = patrol
+base = 6
+wBold = 2
+# 플레이어와 동맹일 때만 선단을 막으러 나간다
+cond = plan:bt_polpo.state == 1 && npc:@self.band >= 2
+effect = add plan:bt_polpo.progress -1
+
+[action smuggle]
+name = 밀수
+behavior = wander
+base = 7
+wGreed = 3
+effect = add faction:black_table.treasury 1
+
+[action guard_festival]
+name = 축제 지키기
+behavior = patrol
+base = 6
+cond = plan:baccana_harvest.state == 1 && npc:@self.band >= 1
+effect = add plan:baccana_harvest.progress -1
+
+[action hire_hunters]
+name = 사냥꾼 고용
+behavior = stay
+base = 8
+wGreed = 3
+cond = plan:baccana_harvest.state == 1 && faction:landlord.treasury >= 5
+effect = add faction:landlord.treasury -1; add plan:baccana_harvest.progress 1
+
+[action defend_mountain]
+name = 산 지키기
+behavior = patrol
+base = 10
+wBold = 2
+goal = guard_mountain
+cond = plan:bt_monte.state == 1 && npc:@self.band >= 2
+effect = add plan:bt_monte.progress -2
+
+[action hide]
+name = 숨기
+behavior = stay
+base = 7
+goal = wait_heir
+# 혼자서는 열흘까지만 버틴다
+cond = plan:hagen_hunted.state == 1 && npc:@self.mark < 10
+effect = add plan:hagen_hunted.progress -1; add npc:@self.mark 1
+
+# ===== 마을 테스트 (고향 확장판) =====
+
+# ---- 산적 ----
+[action rob]
+name = 약탈
+behavior = rob
+base = 7
+wGreed = 2
+wPrinciple = -3
+wBold = 1
+cond = faction:@faction.treasury < 90
+effect = add faction:@faction.treasury 2; add region:@region.unrest 4; add region:@region.prosperity -1; chance 35 { notify bandit_raid }
+
+[action extort]
+name = 협박
+behavior = stalk
+base = 6
+wGreed = 3
+wPrinciple = -2
+effect = add faction:@faction.treasury 1; add region:@region.unrest 1
+
+[action drink]
+name = 술판
+behavior = gossip
+base = 5
+wBold = 1
+wPrinciple = -1
+
+[action pickpocket]
+name = 소매치기
+behavior = wander
+base = 7
+wGreed = 2
+wPrinciple = -2
+wBold = -1
+effect = add faction:@faction.treasury 1; add region:@region.unrest 1
+
+[action spy]
+name = 염탐
+behavior = scheme
+base = 6
+wPrinciple = -1
+goal = spy
+effect = add npc:@self.mark 1
+
+[action poach]
+name = 밀렵
+behavior = hunt
+base = 6
+wGreed = 2
+wPrinciple = -2
+effect = add region:@region.prosperity -1
+
+# ---- 상인 ----
+[action trade]
+name = 장사
+behavior = trade
+base = 8
+wGreed = 1
+effect = add faction:@faction.treasury 1; add region:@region.prosperity 1
+
+[action haggle]
+name = 흥정
+behavior = trade
+base = 6
+wGreed = 2
+wPrinciple = -1
+effect = add faction:@faction.treasury 2
+
+[action haul]
+name = 짐 나르기
+behavior = travel
+base = 7
+wPrinciple = 1
+effect = add region:@region.prosperity 1
+
+[action tend_inn]
+name = 여관 일
+behavior = stay
+base = 7
+effect = add region:@region.prosperity 1
+
+# ---- 여행자 ----
+[action travel]
+name = 떠돌기
+behavior = travel
+base = 6
+wBold = 1
+
+[action cook_practice]
+name = 요리 연습
+behavior = stay
+base = 6
+wPrinciple = 1
+goal = become_chef
+
+[action compete]
+name = 사냥 경쟁
+behavior = hunt
+base = 5
+wBold = 2
+wGreed = 1
+# 플레이어와 사이가 좋으면 굳이 겨루지 않는다
+cond = npc:@self.band <= 0
+
+[action pray]
+name = 기도
+behavior = stay
+base = 6
+wPrinciple = 2
+wBold = -1
+
+[action perform]
+name = 공연
+behavior = gossip
+base = 7
+wBold = 1
+effect = add region:@region.unrest -1
+
+[action gossip]
+name = 수다
+behavior = gossip
+base = 5
+
+# ---- 악인 ----
+[action overhunt]
+name = 남획
+behavior = hunt
+base = 8
+wGreed = 3
+wPrinciple = -2
+goal = plunder_lake
+effect = add region:@region.prosperity -2; add faction:black_table.treasury 1; chance 25 { notify overhunt }
+
+[action scheme]
+name = 음모
+behavior = scheme
+base = 6
+wGreed = 1
+wPrinciple = -2
+effect = add region:@region.black 1
+
+[action inspect]
+name = 출장 감독
+behavior = wander
+base = 5
+wPrinciple = 1
+
+# ---- 마을 ----
+[action patrol]
+name = 순찰
+behavior = patrol
+base = 6
+wPrinciple = 2
+wBold = 1
+effect = add region:@region.security 1
+
+# 산적이 불만을 올리면 자경단이 반응한다 (행동끼리 수치로 맞물리는 예)
+[action guard_village]
+name = 마을 경계
+behavior = patrol
+base = 9
+wBold = 2
+cond = region:@region.unrest >= 35
+effect = add region:@region.unrest -3; chance 30 { notify watch_out }
+
+[action gather]
+name = 약초 채집
+behavior = wander
+base = 7
+wPrinciple = 1

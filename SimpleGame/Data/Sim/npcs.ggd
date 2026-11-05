@@ -1,0 +1,754 @@
+﻿# npcs.ggd — NPC 정의 (STORY_SIM.md 15.8)
+#
+# traits = 욕망 규범 기질 (각 -2 ~ +2)
+#   욕망  - 절제 / + 탐욕      규범  - 실리 / + 원칙      기질  - 신중 / + 대담
+# schedule = 새벽|낮|저녁|밤 의 맵 위치 id (고향 맵의 위치는 Game.cpp 위치 표)
+# greet.<ally|friendly|neutral|wary|hostile> — 없는 단계는 neutral 로 대체
+#
+# 명세에 없는 화면용 키 (Sim 로직에는 영향 없음)
+#   cloth = r g b          옷 색
+#   look  = villager bandit merchant traveler hunter pilgrim bard noble villain official guard cloak
+#   bark.<behavior> = ...  그 behavior 로 움직일 때 플레이어가 근처에 오면 하는 말
+#
+# 인코딩 UTF-8 BOM
+
+# ===== 고향 — 튜토리얼 주민 12명 =====
+[npc mira]
+name = 미라
+title = 방앗간 주인
+faction = villagers
+region = home
+traits = -1 1 -1
+goal = keep_promise
+likes = grain_bread
+actions = idle|tend_village
+init_affinity = 30
+init_trust = 30
+power = 5
+schedule = mill|square|mill|mill_house
+greet.ally = 네 엄마도 떠나기 전날 딱 그 얼굴이었어.
+greet.neutral = 방아 돌리는 소리 시끄럽지? 금방 끝나.
+ask.mother_was_chilsung = 네 엄마? 칠성이었어.\n마을 사람들한테는 그냥 식당 아줌마였지만.
+choice.seal_lake.text = 호수를 지켜 주세요. 봄에 검은 배가 올 거예요.
+choice.seal_lake.cond = npc:mira.band >= 2 && faction:villagers.rep >= 40 && season == 3
+choice.seal_lake.effect = flag home_sealed
+cloth = 0.76 0.34 0.33
+look = villager
+
+[npc bruno]
+name = 브루노
+title = 사냥꾼
+faction = villagers
+region = home
+traits = 0 0 1
+goal = hunt
+likes = lake_deer
+actions = idle|hunt
+init_affinity = 10
+power = 15
+schedule = house_2|forest_edge|square|house_2
+greet.neutral = 강한 놈일수록 맛이 좋아.\n예나 지금이나 그건 안 변하지.
+greet.friendly = 오늘 공터 쪽은 네가 먼저 돌아. 난 가장자리를 몰 테니.
+greet.wary = 내가 쫓던 놈을 채 가다니. 사냥꾼 사이에도 예의라는 게 있어.
+bark.hunt = 몰이 들어간다! 비켜!
+cloth = 0.38 0.43 0.60
+look = hunter
+
+[npc sera]
+name = 세라
+title = 이웃
+faction = villagers
+region = home
+traits = 0 0 0
+goal = gossip
+actions = idle|gossip|tend_village
+init_affinity = 10
+power = 2
+schedule = house_3|square|square|house_3
+greet.neutral = 협회 심사관이 이런 촌구석까지 온다니.\n살다 보니 별일이 다 있네.
+greet.friendly = 너 요즘 마을에서 제일 유명해. 좋은 쪽으로 말이야.
+bark.gossip = 들었어? 동쪽 길에 또 붉은 두건이 나왔대.
+cloth = 0.72 0.61 0.30
+look = villager
+
+[npc tomas]
+name = 토마스
+title = 어부
+faction = villagers
+region = home
+traits = -1 1 0
+goal = protect_lake
+likes = lake_fish
+actions = idle|guard_lake
+init_affinity = 10
+power = 10
+schedule = house_5|lakeside|lakeside|house_5
+greet.neutral = 작년에 상단이 호수를 싹 훑고 갔어.\n새끼까지 남김없이 말이야.
+greet.friendly = 너는 잡고 나서 인사를 하더라. 그거면 됐다.
+cloth = 0.34 0.51 0.43
+look = villager
+
+[npc ines]
+name = 이네스
+title = 포도밭 일꾼
+faction = villagers
+region = home
+traits = 0 1 0
+goal = hunt_pride
+actions = idle|tend_village|gossip
+init_affinity = 5
+power = 4
+schedule = house_4|vineyard|square|house_4
+greet.neutral = 우리 아버지가 6등급을 잡은 적이 있어.\n돌아가실 때까지 그 얘기만 하셨지.
+cloth = 0.64 0.42 0.64
+look = villager
+
+[npc piet]
+name = 피에트
+title = 늙은 어부
+faction = villagers
+region = home
+traits = -1 0 -1
+goal = quiet_life
+actions = idle|tend_village
+init_affinity = 5
+power = 6
+schedule = house_6|lakeside|tavern|house_6
+greet.neutral = 물가는 조심해라.\n요 며칠 갈대밭에서 뭔가 큰 게 움직여.
+cloth = 0.50 0.45 0.35
+look = villager
+
+[npc loren]
+name = 로렌
+title = 사냥 안내인
+faction = villagers
+region = home
+traits = 0 1 1
+goal = hunt
+actions = idle|hunt
+init_affinity = 10
+power = 12
+schedule = house_7|hunt_clearing|square|house_7
+greet.neutral = 토마토마는 순해서 먼저 덤비지 않아.\n첫 사냥 상대로는 딱이지.
+bark.hunt = 공터 안쪽은 토마토마가 많아. 천천히 다가가.
+cloth = 0.44 0.56 0.52
+look = hunter
+
+[npc anna]
+name = 안나
+title = 이웃 아주머니
+faction = villagers
+region = home
+traits = -1 1 -1
+goal = feed_everyone
+actions = idle|tend_village|gossip
+init_affinity = 20
+power = 2
+schedule = house_8|square|house_8|house_8
+greet.neutral = 부엌은 잘 돌아가니?\n네 어머니 국물 맛이 아직도 생각난다.
+cloth = 0.78 0.55 0.42
+look = villager
+
+[npc gio]
+name = 지오
+title = 마을 청년
+faction = villagers
+region = home
+traits = 1 0 1
+goal = hunt
+actions = idle|hunt|gossip|patrol
+init_affinity = 5
+power = 10
+schedule = house_9|forest_edge|tavern|house_9
+greet.neutral = 요리사 등급이 오르면 북쪽 산도 들어갈 수 있대.\n거긴 나오는 놈들 등급이 다르다더라.
+greet.wary = 흥, 너만 사냥하냐? 나도 할 줄 알아.
+cloth = 0.42 0.48 0.36
+look = villager
+
+[npc elsa]
+name = 엘사
+title = 우물가 이웃
+faction = villagers
+region = home
+traits = -1 0 -1
+goal = quiet_life
+actions = idle|tend_village|gossip
+init_affinity = 5
+power = 2
+schedule = house_10|well|square|house_10
+greet.neutral = 우물물이 예전만 못해.\n여름이라 그런 거라고들 하는데, 글쎄.
+cloth = 0.68 0.66 0.72
+look = villager
+
+[npc paolo]
+name = 파올로
+title = 마을 원로
+faction = villagers
+region = home
+traits = 0 2 0
+goal = protect_village
+actions = idle|patrol|tend_village
+init_affinity = 0
+init_trust = 10
+power = 8
+schedule = house_11|gate|square|house_11
+greet.neutral = 숲 안쪽까지는 들어가지 마라.\n공터까지만. 그 너머는 네 등급이 아니야.
+greet.friendly = 제법이구나. 그래도 동쪽 길은 해 지면 다니지 마라.
+cloth = 0.56 0.40 0.30
+look = villager
+
+[npc nina]
+name = 니나
+title = 소꿉친구
+faction = villagers
+region = home
+traits = 0 0 1
+goal = open_shop_together
+actions = idle|gossip|tend_village
+init_affinity = 25
+power = 3
+schedule = house_12|vineyard|square|house_12
+greet.neutral = 나중에 네 가게 열면 첫 손님은 나야.\n약속한 거다.
+greet.ally = 가게 이름은 정했어? 안 정했으면 내가 지어 줄게.
+cloth = 0.80 0.70 0.48
+look = villager
+
+# ===== 고향 — 확장판 신규 20명 =====
+
+# ---- 산적 (붉은 두건) ----
+[npc rocco]
+name = 로코
+title = 붉은 두건 두목
+faction = bandits
+region = home
+traits = 2 -2 2
+goal = plunder
+likes = roast_meat
+dislikes = herb_tea
+actions = idle|rob|extort|drink
+init_affinity = -50
+power = 35
+schedule = camp|road_east|road_east|camp
+greet.hostile = 요리사 나부랭이가 국자 들고 어딜 기웃거려.\n가진 거 다 두고 꺼져.
+greet.wary = 흥, 혼자 다니는 요리사라. 배짱은 봐줄 만하군.
+greet.neutral = 네 국자 소문은 들었다. 우리 길을 막지만 마라.
+greet.friendly = 한 그릇 얻어먹은 값은 한다. 동쪽 길은 오늘 조용할 거다.
+bark.rob = 짐 내려놔! 붉은 두건 통행세다!
+bark.stalk = 어이, 국자. 주머니가 무거워 보이는데?
+bark.gossip = 오늘 턴 수레 얘기 해 줄까? 크하하!
+cloth = 0.62 0.18 0.16
+look = bandit
+
+[npc vito]
+name = 비토
+title = 산적
+faction = bandits
+region = home
+traits = 1 -1 2
+goal = plunder
+actions = idle|rob|hunt|drink
+init_affinity = -30
+power = 20
+schedule = camp|road_north|road_east|camp
+greet.hostile = 두목이 너 보이면 손봐 주라더라.
+greet.wary = 뭘 봐. 사냥감 뺏으러 왔냐?
+greet.neutral = 멧돼지 잡는 솜씨는 인정하지.
+bark.rob = 거기 수레! 멈춰!
+bark.hunt = 오늘 저녁은 내가 잡은 걸로 한다.
+cloth = 0.55 0.22 0.20
+look = bandit
+
+[npc sal]
+name = 살
+title = 산적단 신참
+faction = bandits
+region = home
+traits = 0 0 -2
+goal = go_home
+likes = mushroom_soup
+actions = idle|rob|poach|drink
+init_affinity = 0
+power = 5
+schedule = camp|bandit_woods|camp|camp
+greet.wary = 저, 저는 그냥 망만 봐요...
+greet.neutral = 여기 들어온 걸 후회하고 있어요.\n어머니 수프가 먹고 싶네요.
+greet.friendly = 당신처럼 요리를 해 보고 싶어요. 산적 말고.
+greet.ally = 두목이 동쪽 길 수레를 노려요. 오늘 밤이에요.
+bark.hunt = (덤불 뒤에서 몰래 덫을 놓고 있다)
+bark.rob = 죄, 죄송해요! 짐 좀...
+cloth = 0.60 0.40 0.30
+look = bandit
+
+[npc nerina]
+name = 네리나
+title = 시장의 정보꾼
+faction = bandits
+region = home
+traits = 1 -2 -1
+goal = profit
+actions = idle|pickpocket|spy
+init_affinity = -10
+power = 8
+schedule = market|market|tavern|camp
+greet.wary = 어머, 주머니 조심해.\n요즘 시장에 손버릇 나쁜 애가 있대.
+greet.neutral = 정보가 필요하면 값을 치러. 은화든 요리든.
+greet.friendly = 붉은 두건 애들이 여관 뒤에서 모여.\n난 아무 말도 안 했다.
+bark.wander = (사람들 사이를 미끄러지듯 지나간다)
+bark.scheme = (상인들 대화를 엿듣고 있다)
+cloth = 0.30 0.28 0.34
+look = cloak
+
+# ---- 상인 ----
+[npc ottavio]
+name = 오타비오
+title = 떠돌이 상단주
+faction = caravan
+region = home
+traits = 2 0 0
+goal = profit
+actions = idle|trade|haggle
+init_affinity = 0
+power = 10
+schedule = caravan|market|market|caravan
+greet.wary = 외상은 안 됩니다. 요즘 길이 험해서.
+greet.neutral = 남쪽 향신료, 북쪽 소금.\n없는 것 빼고 다 있습니다.
+greet.friendly = 단골 요리사님께는 한 줌 더 얹어 드리죠.
+greet.ally = 산적이 설쳐서 상단이 떠나려 해요.\n손 좀 빌려주시겠습니까?
+bark.trade = 향신료 사세요! 오늘 들어온 물건입니다!
+cloth = 0.58 0.42 0.20
+look = merchant
+
+[npc lisa]
+name = 리자
+title = 향신료 상인
+faction = caravan
+region = home
+traits = 0 1 -1
+goal = fair_trade
+actions = idle|trade
+init_affinity = 10
+power = 5
+schedule = caravan|market|market|caravan
+greet.neutral = 사프란은 물에 불려서 써요.\n그냥 넣으면 반은 버리는 거예요.
+greet.friendly = 요리사님 손을 보니 불 앞에 오래 서 있었네요.
+bark.trade = 사프란, 후추, 월계수! 향 먼저 맡아 보세요.
+cloth = 0.72 0.46 0.30
+look = merchant
+
+[npc beppe]
+name = 베페
+title = 수레꾼
+faction = caravan
+region = home
+traits = -1 0 0
+goal = deliver
+actions = idle|haul|travel
+init_affinity = 5
+power = 8
+schedule = caravan|road_east|market|caravan
+greet.neutral = 동쪽 길은 해 지기 전에만 다녀요.
+greet.wary = 산적이랑 한패 아니죠? 요즘은 다 의심스러워서.
+bark.travel = 이랴! 해 지기 전에 도착해야 해.
+cloth = 0.46 0.40 0.30
+look = merchant
+
+[npc marta]
+name = 마르타
+title = 여관 주인
+faction = villagers
+region = home
+traits = -1 1 0
+goal = keep_inn
+actions = idle|tend_inn|gossip
+init_affinity = 15
+init_trust = 10
+power = 5
+schedule = inn|inn|tavern|inn
+greet.neutral = 방은 있어요.\n식당집 아이가 여관 밥을 먹으러 오다니.
+greet.friendly = 오늘 스튜 간 좀 봐 줄래? 네 어머니 솜씨가 그립다.
+bark.stay = 빈 방 있어요! 따뜻한 스튜도!
+cloth = 0.66 0.36 0.30
+look = villager
+
+# ---- 여행자 (주인공 같은) ----
+[npc leo]
+name = 레오
+title = 요리사 지망 여행자
+faction = none
+region = home
+traits = 0 1 1
+goal = find_teacher
+actions = idle|hunt|cook_practice|travel
+init_affinity = 10
+power = 12
+schedule = inn|hunt_clearing|tavern|inn
+greet.wary = 내 사냥감 가로챈 거, 잊지 않았어.
+greet.neutral = 너도 혼자 사냥하고 혼자 요리해? 나도야!
+greet.friendly = 우리 둘 다 이상한 요리사네.\n누가 먼저 별을 다는지 보자.
+greet.ally = 네 요리 먹고 알았어.\n난 흉내만 내고 있었다는 걸.
+bark.hunt = 좋아, 저 녀석은 내 거야!
+bark.stay = (냄비에 코를 박고 간을 보고 있다)
+cloth = 0.36 0.52 0.64
+look = traveler
+
+[npc yuna]
+name = 유나
+title = 미식 사냥꾼
+faction = none
+region = home
+traits = 1 0 2
+goal = top_hunter
+actions = idle|hunt|compete|travel
+init_affinity = -5
+power = 25
+schedule = inn|meadow_sw|tavern|inn
+greet.wary = 짝도 없이 다니는 요리사? 사냥감이나 흘리지 마.
+greet.neutral = 들판 남쪽은 내 사냥터야. 알아서 비켜.
+greet.friendly = 제법이네. 다음 사냥은 같이 몰아 볼까.\n...아니, 역시 따로 하자.
+bark.hunt = 느려! 그건 내가 먼저 봤어!
+cloth = 0.28 0.44 0.30
+look = hunter
+
+[npc hans]
+name = 한스
+title = 북쪽에서 온 순례 요리사
+faction = none
+region = home
+traits = -2 2 -1
+goal = pilgrimage
+actions = idle|pray|travel
+init_affinity = 5
+init_trust = 5
+power = 15
+schedule = lakeside|square|inn|inn
+greet.wary = 감사 없이 거두는 손은 결국 빈손이 됩니다.
+greet.neutral = 먹기 전에 고개 숙이는 사람을 요즘은 잘 못 봐요.
+greet.friendly = 당신은 받는 법을 아는군요.\n북쪽 숲에선 그걸 제일 먼저 배웁니다.
+greet.ally = 북쪽에 은둔한 요리사가 있어요.\n언젠가 당신을 찾을 겁니다.
+bark.stay = (호수를 향해 조용히 고개를 숙이고 있다)
+cloth = 0.62 0.64 0.70
+look = pilgrim
+
+[npc celine]
+name = 셀린
+title = 떠돌이 음유시인
+faction = none
+region = home
+traits = 0 -1 1
+goal = fame
+actions = idle|perform|gossip|travel
+init_affinity = 10
+power = 3
+schedule = square|square|tavern|inn
+greet.neutral = 혼자서 호수사슴을 잡는 요리사라니!\n노래 한 곡 감이네.
+greet.friendly = 네 이야기는 벌써 두 마을 건너까지 갔어.\n내가 좀 부풀렸지만.
+bark.gossip = ~ 국자 하나 든 아이가 숲으로 갔네 ~
+cloth = 0.78 0.38 0.56
+look = bard
+
+[npc dario]
+name = 다리오
+title = 몰락 귀족
+faction = none
+region = home
+traits = 1 1 -1
+goal = restore_house
+actions = idle|travel|gossip
+init_affinity = -5
+power = 6
+schedule = inn|vineyard|tavern|inn
+greet.wary = 촌구석 요리라.\n우리 집 주방장은 칠성 아래서 배웠네. ...예전 얘기지.
+greet.neutral = 이 포도밭, 예전엔 우리 가문 것이었지.
+greet.friendly = 자네 요리에서 옛 저택의 저녁 냄새가 났네. 고맙군.
+cloth = 0.40 0.30 0.50
+look = noble
+
+# ---- 악인 ----
+[npc fosco]
+name = 포스코
+title = 밀렵꾼 두목
+faction = black_table
+region = home
+traits = 2 -2 1
+goal = plunder_lake
+actions = idle|overhunt|scheme|extort
+init_affinity = -45
+power = 30
+schedule = manor|lakeside|lakeside|manor
+greet.hostile = 호수는 이제 우리 거다.\n꼬마 요리사는 솥이나 닦아.
+greet.wary = 작년에 호수 싹 훑은 게 누군지 궁금하냐?\n궁금해하지 마.
+greet.neutral = 좋은 재료는 먼저 잡는 놈 거야. 너도 알잖아.
+bark.hunt = 새끼까지 전부 담아. 남기면 딴 놈이 가져간다.
+bark.stalk = 따라다니지 마라. 호수에 빠지는 사고가 잦은 동네야.
+cloth = 0.20 0.20 0.24
+look = villain
+
+[npc lucrezia]
+name = 루크레치아
+title = 친절한 후원자
+faction = black_table
+region = home
+traits = 2 -2 -2
+goal = recruit
+actions = idle|scheme|recruit|gossip
+init_affinity = 30
+power = 15
+schedule = manor|market|tavern|manor
+greet.hostile = 넌 식탁에 앉을 자격을 잃었어.
+greet.wary = 거절이라니 아쉽네.\n식탁은 넓지만 인내심은 좁단다.
+greet.neutral = 어머, 네가 그 혼자 사냥하는 요리사구나.\n재능은 후원받아야 빛나는 법이야.
+greet.friendly = 언제든 저택으로 와.\n좋은 재료, 좋은 칼, 필요한 건 다 줄게.
+greet.ally = 우리 식탁에 네 자리를 마련해 둘게.\n아주 검고 긴 식탁이야.
+bark.scheme = (누군가와 낮은 목소리로 이야기하고 있다)
+bark.gossip = 요즘 이 마을엔 재능 있는 아이들이 많네.
+cloth = 0.46 0.16 0.24
+look = noble
+
+[npc cassio]
+name = 카시오
+title = 협회 출장 감독관
+faction = guild
+region = home
+traits = 2 -2 0
+goal = bribe
+actions = idle|extort|inspect|scheme
+init_affinity = -10
+power = 12
+schedule = inn|market|tavern|guild_post
+greet.wary = 채집 허가증? 없으면 벌금이고,\n있어도 수수료가 있지.
+greet.neutral = 협회 출장 감독관이다.\n여기서 잡은 건 전부 신고하도록.
+greet.friendly = 자네 건은 내가 좀 봐줄 수도 있지.\n물론 성의가 있으면.
+bark.stalk = 거기, 방금 잡은 거 신고했나?
+bark.wander = (장부에 뭔가를 적으며 상인들을 훑어본다)
+cloth = 0.30 0.34 0.52
+look = official
+
+[npc gaspare]
+name = 가스파레
+title = 검은 식탁 용병
+faction = black_table
+region = home
+traits = 1 -1 2
+goal = enforce
+actions = idle|extort|patrol|hunt
+init_affinity = -55
+power = 40
+schedule = manor|road_north|road_east|manor
+greet.hostile = 한 발만 더 오면 국자째 부러뜨린다.
+greet.wary = 볼일 없으면 지나가.
+bark.stalk = 계속 따라와 봐. 어디까지 오나 보자.
+bark.patrol = (칼자루에 손을 얹고 길을 훑어본다)
+cloth = 0.16 0.16 0.18
+look = villain
+
+# ---- 마을 ----
+[npc aldo]
+name = 알도
+title = 자경단원
+faction = villagers
+region = home
+traits = -1 2 1
+goal = protect_village
+actions = idle|patrol|guard_village
+init_affinity = 15
+init_trust = 10
+power = 20
+schedule = house_1|gate|square|gate
+greet.neutral = 동쪽 길에 붉은 두건이 나온대. 혼자 다니지 마.
+greet.friendly = 너만 믿는다. 아니, 너도 조심해.
+greet.ally = 자경단은 네 편이야. 무슨 일 있으면 종을 쳐.
+bark.patrol = 이상 없음! ...아마도.
+cloth = 0.34 0.40 0.46
+look = guard
+
+[npc ruggero]
+name = 루제로
+title = 늙은 사냥꾼
+faction = villagers
+region = home
+traits = 0 1 0
+goal = hunt
+actions = idle|hunt|gossip
+init_affinity = 20
+power = 18
+schedule = house_13|meadow_sw|tavern|house_13
+greet.neutral = 잡은 뒤엔 꼭 인사해라. 산이 기억한다.
+greet.friendly = 네 어머니도 그랬지.\n잡고 나서 한참을 서 있곤 했어.
+bark.hunt = 바람을 등지고... 천천히...
+cloth = 0.44 0.36 0.24
+look = hunter
+
+[npc pia]
+name = 피아
+title = 약초꾼
+faction = villagers
+region = home
+traits = -1 1 -1
+goal = gather
+actions = idle|gather|gossip
+init_affinity = 15
+power = 3
+schedule = house_14|forest_edge|square|house_14
+greet.neutral = 햇살풀은 해 뜰 때 따야 단내가 안 날아가.
+greet.friendly = 이거 가져가.\n호수사슴 잡을 때 비린내 잡는 풀이야.
+bark.wander = (쪼그려 앉아 풀잎을 하나하나 뒤집어 본다)
+cloth = 0.50 0.62 0.40
+look = villager
+
+# ===== 항구 =====
+[npc mateo]
+name = 마테오
+title = 생선 장수 (은퇴한 칠성)
+faction = none
+region = port
+traits = -1 1 -2
+goal = quiet_life
+likes = olive_pickle
+actions = idle|sell
+power = 70
+rel = orso:30|lucia:40
+schedule = fish_stall|fish_stall|fish_stall|mateo_house
+greet.neutral = 생선 살 거 아니면 비켜.
+greet.ally = …엘레나 손놀림이 보이는구나.
+ask.eight_cut = 폴포 레는 다리마다 다른 짐승이다.\n여덟 번 칼을 바꿔 잡아라.
+choice.old_pass.text = 그랑 테라에 데려가 주세요.
+choice.old_pass.cond = npc:mateo.band >= 2 && day >= 90
+choice.old_pass.effect = flag player_pass
+
+[npc orso]
+name = 오르소
+title = 협회 심사관
+faction = guild
+region = port
+traits = -1 2 -1
+goal = find_traitor
+likes = aged_cheese
+actions = idle|investigate
+init_trust = 10
+power = 30
+rel = seraphine:-30|mateo:30
+schedule = guild_office|guild_office|tavern|inn
+greet.neutral = 견습이군. 그 등급으로 할 수 있는 일은 많지 않아.
+choice.expose.text = 세라핀이 검은 식탁과 내통하고 있습니다.
+choice.expose.cond = fact:seraphine_traitor && npc:orso.trust >= 40 && plan:chilsung_exam.state <= 1
+choice.expose.effect = flag seraphine_exposed; capture seraphine
+choice.apply_exam.text = 칠성 결원 심사에 지원하겠습니다.
+choice.apply_exam.cond = var:player_grade >= 2 && plan:chilsung_exam.state <= 1
+choice.apply_exam.effect = flag player_applied
+
+[npc seraphine]
+name = 세라핀
+title = 협회 부회장
+faction = guild
+region = port
+traits = 1 -2 -1
+goal = rig_exam
+likes = rare_fish
+actions = idle|rig_exam|recruit
+power = 25
+rel = orso:-30|valentin:20
+schedule = guild_office|guild_office|guild_office|mansion
+
+[npc valentin]
+name = 발렌틴
+title = 이성 요리사
+faction = guild
+region = port
+traits = 1 0 2
+goal = chilsung
+likes = polpo_re|aurora_deer
+actions = idle|train|show_off
+init_affinity = -10
+power = 40
+meter = 10
+rel = seraphine:20
+schedule = guild_kitchen|harbor|tavern|guild_kitchen
+on_served = add npc:valentin.meter 8
+react.legend_catch = add npc:valentin.meter 10
+react.stole_legend = add npc:valentin.meter 5
+greet.hostile = 짝도 없는 촌뜨기가 여기까지 오다니.
+greet.neutral = 또 너냐. 이번 사냥감도 내 거다.
+greet.friendly = …혼자서 그걸 잡았다고? 거짓말은 아니겠지.
+greet.ally = 먼저 가라. 오로라 사슴은 네 몫이다.
+
+[npc lucia]
+name = 루치아
+title = 어민조합장
+faction = fishers
+region = port
+traits = 0 2 2
+goal = guard_sea
+likes = limone_drago
+actions = idle|patrol_sea
+init_affinity = 10
+power = 25
+rel = mateo:40
+schedule = pier|pier|union_hall|union_hall
+
+[npc donato]
+name = 도나토
+title = 검은 식탁 선단장
+faction = black_table
+region = port
+traits = 2 -1 1
+goal = fleet
+actions = idle|smuggle
+power = 30
+schedule = harbor|harbor|tavern|black_ship
+
+# ===== 맵 없는 지역 (전략 층 전용) =====
+[npc anselme]
+name = 앙셀므
+title = 수도원 양조 수도사
+faction = monastery
+region = hills
+traits = -2 1 -1
+goal = guard_festival
+actions = idle|guard_festival
+power = 20
+
+[npc corvi]
+name = 코르비
+title = 대지주
+faction = landlord
+region = hills
+traits = 2 -1 0
+goal = profit
+actions = idle|hire_hunters
+power = 10
+
+[npc greta]
+name = 그레타
+title = 산악 사냥꾼 길드장
+faction = foragers
+region = alps
+traits = 0 1 2
+goal = guard_mountain
+likes = ferro_toro
+actions = idle|hunt|defend_mountain
+init_affinity = -10
+power = 45
+
+[npc hagen]
+name = 하겐
+title = 칠성, 북부 숲 은둔자
+faction = none
+region = north
+traits = -2 2 -2
+goal = wait_heir
+likes = aurora_deer|smoked_berry
+actions = idle|hide
+power = 60
+choice.pass.text = 저를 그랑 테라로 데려가 주세요.
+choice.pass.cond = npc:hagen.band >= 2 && npc:hagen.captured == 0
+choice.pass.effect = flag player_pass
+
+[npc severo]
+name = 세베로
+title = 검은 식탁 수장
+faction = black_table
+region = terra
+traits = 2 -2 1
+goal = gran_gusto
+actions = idle|recruit
+power = 60

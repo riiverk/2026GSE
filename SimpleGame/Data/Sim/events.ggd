@@ -1,0 +1,62 @@
+﻿# events.ggd — 이벤트 (STORY_SIM.md 15.10)
+# delta(npc) = delta + wGreed*욕망 + wPrinciple*규범 + wBold*기질
+# target = victim 이면 목격자가 아니라 피해 NPC 하나에게만 적용한다
+# 인코딩 UTF-8 BOM
+
+[event legend_catch]
+delta = 4
+wBold = 3
+trust = 2
+fame = 5
+faction_delta = guild:3
+
+[event stole_legend]
+target = victim
+delta = -10
+wBold = 4
+
+[event big_catch]
+delta = 3
+wBold = 3
+
+[event gratitude]
+delta = 2
+wPrinciple = 2
+trust = 2
+
+[event beat_black]
+delta = 6
+wPrinciple = 2
+fame = 3
+faction_delta = black_table:-10|fishers:5|foragers:5|villagers:5
+
+[event attack_npc]
+delta = -40
+trust = -40
+faction_delta = @victim_faction:-20
+
+[event reported]
+delta = -5
+wPrinciple = -2
+
+# ---- 마을 테스트 (고향 확장판) ----
+# 잡몹 포획. 대담하거나 욕심 많은 사람은 좋게 보고, 신중한 사람은 시큰둥하다
+[event catch_small]
+delta = 0
+wBold = 1
+wGreed = 1
+
+# 튜토리얼의 호수사슴
+[event beast_catch]
+delta = 3
+wBold = 2
+trust = 1
+fame = 3
+faction_delta = villagers:2
+
+# NPC 사냥꾼이 노리던 먹잇감을 플레이어가 먼저 잡음 (stole_legend 의 잡몹판)
+[event stole_prey]
+target = victim
+delta = -6
+wBold = 2
+wGreed = -2

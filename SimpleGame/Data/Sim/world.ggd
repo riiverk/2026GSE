@@ -1,0 +1,124 @@
+﻿# world.ggd — 전역 변수, 지역, 알림 문구 (STORY_SIM.md 15.5)
+# 인코딩 UTF-8 BOM
+
+# ===== 전역 =====
+[var player_power]
+init = 0
+max = 999
+
+[var player_grade]
+init = 0
+max = 5
+
+[var menu_count]
+init = 0
+max = 7
+
+[var legends_eaten]
+init = 0
+
+[var tartu_size]
+init = 1
+min = 1
+max = 4
+
+[var black_army]
+init = 0
+
+[var fame]
+init = 0
+max = 100
+
+# ===== 지역 =====
+[region home]
+name = 고향 마을
+prosperity = 30
+black = 0
+unrest = 20
+security = 70
+map = tutorial
+
+[region port]
+name = 항구 도시
+prosperity = 70
+black = 40
+unrest = 50
+security = 50
+map = port
+
+[region hills]
+name = 구릉 농경지
+prosperity = 60
+black = 20
+unrest = 40
+security = 60
+
+[region alps]
+name = 산악 지대
+prosperity = 50
+black = 30
+unrest = 40
+security = 40
+
+[region north]
+name = 북부 숲
+prosperity = 20
+black = 10
+unrest = 10
+security = 30
+
+[region terra]
+name = 그랑 테라
+black = 100
+security = 0
+closed = true
+
+# ===== 알림 문구 =====
+[notice val_polpo]
+text = 발렌틴이 폴포 레를 잡았다는 소문이 항구를 휩쓸었다.
+
+[notice bt_polpo]
+text = 검은 돛의 선단이 거대한 무언가를 끌고 항구를 떠났다.
+
+[notice bt_monte]
+text = 산에서 몬테 투베로의 울음이 끊겼다고 한다.
+
+[notice bt_army]
+text = 산악 너머에서 쇠사슬 소리가 들린다. 무언가를 기르고 있다.
+
+[notice hagen_captured]
+text = 북쪽 숲의 오두막이 비어 있다고 한다.
+
+[notice exam_black]
+text = 칠성 결원 심사 결과가 나왔다. 아무도 모르는 이름이다.
+
+[notice exam_valentin]
+text = 발렌틴이 역대 최연소 칠성이 되었다.
+
+[notice exam_player]
+text = 새 칠성의 이름이 발표되었다. 리노.
+
+[notice valentin_fall]
+text = 발렌틴이 협회를 떠났다. 검은 옷을 입은 그를 봤다는 사람이 있다.
+
+[notice baccana]
+text = 올해 축제에서 바카나가 사라졌다. 대지주의 짐마차가 북쪽으로 갔다.
+
+[notice val_aurora]
+text = 발렌틴이 오로라 사슴을 잡았다. 북쪽 하늘이 하룻밤 꺼졌다고 한다.
+
+[notice bt_starscale]
+text = 고향 호수에 검은 배가 떴다.
+
+[notice eclipse_soon]
+text = 해가 이상하게 붉다. 일식이 가깝다.
+
+# ---- 마을 테스트 (고향 확장판) ----
+[notice bandit_raid]
+text = 붉은 두건들이 동쪽 길에서 짐마차를 털었다고 한다.
+
+[notice overhunt]
+text = 호숫가에 빈 통발이 잔뜩 버려져 있다. 누가 싹 훑어 갔다.
+
+[notice watch_out]
+text = 자경단이 밤마다 횃불을 들고 마을을 돈다.

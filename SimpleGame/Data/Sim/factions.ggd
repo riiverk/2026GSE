@@ -1,0 +1,60 @@
+﻿# factions.ggd — 세력과 세력 관계 (STORY_SIM.md 15.6)
+# 인코딩 UTF-8 BOM
+
+[faction guild]
+name = 미식가 협회
+rep = 0
+
+[faction black_table]
+name = 검은 식탁
+rep = -20
+treasury = 70
+
+[faction villagers]
+name = 고향 주민
+rep = 20
+
+[faction fishers]
+name = 항구 어민조합
+rep = 10
+treasury = 20
+
+[faction monastery]
+name = 구릉 수도원
+rep = 0
+
+[faction landlord]
+name = 구릉 대지주
+rep = 0
+treasury = 40
+
+[faction foragers]
+name = 산악 사냥꾼 길드
+rep = -10
+treasury = 30
+
+# ---- 마을 테스트 (고향 확장판) ----
+[faction bandits]
+name = 붉은 두건 산적단
+rep = -30
+treasury = 20
+
+[faction caravan]
+name = 떠돌이 상단
+rep = 0
+treasury = 50
+
+# 세력 관계 (대칭, 미기재 0)
+[frel init]
+pair += guild.black_table:-60
+pair += black_table.fishers:-50
+pair += black_table.foragers:-40
+pair += black_table.landlord:40
+pair += monastery.landlord:-40
+pair += guild.fishers:20
+pair += bandits.villagers:-50
+pair += bandits.caravan:-60
+pair += bandits.black_table:30
+pair += caravan.villagers:20
+pair += caravan.guild:10
+pair += caravan.black_table:-10

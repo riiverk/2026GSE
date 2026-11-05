@@ -1,0 +1,806 @@
+<!doctype html>
+<!--
+  그랑 구스토 월드 모니터
+
+  사용법
+    1. 게임을 실행한다. 콘솔에 "[Monitor] listening on http://127.0.0.1:7777/" 이 뜬다.
+    2. 이 파일을 브라우저로 직접 열거나, http://127.0.0.1:7777/ 을 연다.
+    3. 포트가 다르면(7777 이 사용 중이면 7778 ...) 위쪽 주소 칸을 고친다.
+    게임이 꺼져 있어도 페이지는 1초마다 다시 붙는다. 저장해 둔 스냅샷(.json / .jsonl)을
+    페이지에 끌어다 놓으면 게임 없이도 볼 수 있다.
+
+  수신: Server-Sent Events  GET <주소>/events   (메시지 하나 = JSON 한 줄)
+  스키마 gg-monitor/1
+
+    {"t":"hello", "schema":"gg-monitor/1", "port":7777}
+
+    {"t":"log", "text":"scene -> level1"}
+
+    {"t":"snapshot", "seq":12, "uptime":34.5, "scene":"tutorial"|"level1", "fps":60.0,
+     "sim": null | {                                  Sim::WriteMonitorJson
+        "clock":   {day, year, season, seasonId, dayOfSeason, segment, segmentId,
+                    segmentProgress, dayProgress, dayLength, paused, eclipseDay},
+        "vars":    {player_power, fame, black_army, ...},
+        "flags":   ["켜진 플래그 id", ...],
+        "regions": [{i, id, name, map|null, closed, prosperity, black, unrest, security}],
+        "factions":[{i, id, name, rep, treasury}],
+        "npcs":    [{i, id, name, title, goal, faction|null, home, region, alive, captured,
+                     band(-2..2), affinity(유효), rawAffinity, trust, power, meter, mark,
+                     traits:[greed, principle, bold],
+                     action|null, actionName, behavior, score}],
+        "notices": {serial, list:[{day, text}]}           최근 16개, serial 은 누적 개수
+     },
+     "maps": [{                                       Game / Level1 WriteMonitorMap
+        id, name, region|null, active, time, quest?, seed?,
+        player: {x, y, hp?, maxHp?, level?},
+        mobs:   {alive, total, respawning?, claimed?, killed?, aggro?, playerCatches?, npcCatches?,
+                 species:[{id, name, grade?, alive, total, respawning?, hostile?}]},
+        bosses: [{id, name, grade, state: "dormant"|"awake"|"caught"}],
+        robberies?,
+        agents: [{npc(= sim.npcs 인덱스), x, y, behavior, loc, walking, indoor, present}]
+     }]}
+-->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>월드 모니터</title>
+<style>
+:root {
+	--bg: #14120f;
+	--panel: #1d1a16;
+	--panel-2: #25211c;
+	--line: #352f27;
+	--text: #ece4d6;
+	--muted: #9d9282;
+	--faint: #6c6457;
+	--accent: #e7a957;
+	--ok: #8fcf7a;
+	--warn: #f0c35a;
+	--bad: #ef6f5e;
+
+	--band-hostile: #ef6f5e;
+	--band-wary: #f0c35a;
+	--band-neutral: #b9b5ab;
+	--band-friendly: #8fcf7a;
+	--band-ally: #f39fb2;
+
+	--f-prosperity: #d8b45a;
+	--f-black: #8a7fa8;
+	--f-unrest: #e08159;
+	--f-security: #6fb3c4;
+
+	--mono: ui-monospace, "Cascadia Mono", Consolas, "D2Coding", monospace;
+	--sans: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+}
+:root[data-theme="light"] {
+	--bg: #f4efe6; --panel: #fffaf2; --panel-2: #f2eadc; --line: #ddd2bf;
+	--text: #2b251d; --muted: #6f6556; --faint: #9a8f7e; --accent: #b86e14;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 var(--sans); }
+body { padding: 0 16px 40px; }
+h2 { font-size: 13px; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 26px 0 10px; display: flex; align-items: baseline; gap: 10px; }
+h2 .sub { font-weight: 400; color: var(--faint); letter-spacing: 0; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+
+/* ---- header ---- */
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 12px 0 10px; border-bottom: 1px solid var(--line);
+	display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+header h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: .02em; }
+header h1 span { color: var(--accent); }
+.conn { display: flex; gap: 6px; align-items: center; }
+.conn input { width: 190px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: 12px var(--mono); }
+button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; font: inherit; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); font-size: 12px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+.pill.on .dot { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+.pill.wait .dot { background: var(--warn); animation: blink 1s infinite; }
+.pill.off .dot { background: var(--bad); }
+@keyframes blink { 50% { opacity: .3; } }
+.stats { display: flex; gap: 14px; color: var(--muted); font-size: 12px; margin-left: auto; flex-wrap: wrap; }
+.stats b { color: var(--text); font-weight: 600; }
+
+/* ---- clock ---- */
+.clock { display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-top: 14px; }
+.clock .date { font-size: 18px; font-weight: 700; }
+.clock .date small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.segs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.seg { position: relative; height: 22px; background: var(--panel-2); border-radius: 4px; overflow: hidden; font-size: 11px; color: var(--faint); display: flex; align-items: center; justify-content: center; }
+.seg i { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.seg span { position: relative; }
+.seg.cur { color: var(--text); outline: 1px solid var(--accent); }
+.seg.past i { width: 100%; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.eclipse { text-align: right; }
+.eclipse b { font-size: 18px; }
+.tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 4px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+.tag.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.tag.accent { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tag.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+
+/* ---- kpis ---- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.kpi .k { font-size: 11px; color: var(--muted); }
+.kpi .v { font-size: 22px; font-weight: 700; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.kpi .d { font-size: 11px; color: var(--faint); }
+
+/* ---- regions ---- */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card.click { cursor: pointer; }
+.card.click:hover, .card.sel { border-color: var(--accent); }
+.card .head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.card .head b { font-size: 14px; }
+.card .head .id { font: 11px var(--mono); color: var(--faint); }
+.card .head .tags { margin-left: auto; display: flex; gap: 4px; }
+.meter { display: grid; grid-template-columns: 58px 1fr 28px; gap: 8px; align-items: center; font-size: 11px; color: var(--muted); margin: 3px 0; }
+.bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 3px; transition: width .4s; }
+.meter .num { text-align: right; color: var(--text); }
+.row2 { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; font-size: 12px; }
+.row2 .big { font: 600 16px var(--mono); }
+.bands { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--panel-2); margin-top: 6px; }
+.bands i { display: block; height: 100%; }
+.legend { display: flex; gap: 8px; flex-wrap: wrap; font-size: 11px; color: var(--muted); margin-top: 5px; }
+.legend span::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; background: var(--c); }
+.acts { font-size: 11px; color: var(--faint); margin-top: 6px; }
+
+/* ---- maps ---- */
+.sp { display: grid; grid-template-columns: 1fr 90px 54px; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; }
+.sp .num { text-align: right; }
+
+/* ---- npc table ---- */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.toolbar input, .toolbar select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+.toolbar #fText { width: 170px; }
+.toolbar label { display: inline-flex; align-items: center; gap: 5px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; min-width: 980px; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-size: 11px; color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--panel); }
+th.sorted::after { content: " ▾"; color: var(--accent); }
+th.sorted.asc::after { content: " ▴"; }
+td.r, th.r { text-align: right; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--panel-2); }
+tbody tr.sel td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+tbody tr.dead td { opacity: .45; }
+tr.flash td { animation: flash 1.6s ease-out; }
+@keyframes flash { 0% { background: color-mix(in srgb, var(--accent) 38%, transparent); } 100% { background: transparent; } }
+.who b { font-weight: 600; }
+.who small { color: var(--faint); margin-left: 6px; }
+.band { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.band::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.aff { display: inline-grid; grid-template-columns: 34px 60px; gap: 6px; align-items: center; }
+.aff .bar { position: relative; height: 5px; }
+.aff .bar i { position: absolute; top: 0; }
+.aff .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--faint); }
+
+/* ---- detail ---- */
+.detail { margin-top: 10px; }
+.detail .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px 24px; }
+.kv { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px dashed var(--line); padding: 3px 0; font-size: 12px; }
+.kv span:first-child { color: var(--muted); }
+.trait { display: grid; grid-template-columns: 118px 1fr 24px; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; }
+.trait .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; }
+.trait .scale i { height: 8px; background: var(--panel-2); border-radius: 2px; }
+.trait .scale i.on { background: var(--accent); }
+.trait .scale i.mid { outline: 1px solid var(--faint); }
+
+/* ---- log ---- */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.log { max-height: 280px; overflow: auto; font-size: 12px; }
+.log div { padding: 4px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 64px 1fr; gap: 10px; }
+.log div span:first-child { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+.log .k-notice span:last-child { color: var(--accent); }
+.log .k-sys span:last-child { color: var(--muted); }
+pre.raw { max-height: 280px; overflow: auto; margin: 0; font: 11px/1.4 var(--mono); color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+.drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: color-mix(in srgb, var(--bg) 85%, transparent); border: 2px dashed var(--accent); font-size: 16px; z-index: 20; }
+body.dragging .drop { display: flex; }
+.empty { padding: 30px; text-align: center; color: var(--faint); }
+@media (max-width: 760px) {
+	.clock { grid-template-columns: 1fr; }
+	.eclipse { text-align: left; }
+	.split { grid-template-columns: 1fr; }
+	.stats { margin-left: 0; }
+	header { position: static; }
+}
+</style>
+</head>
+<body>
+
+<header>
+	<h1>그랑 구스토 <span>월드 모니터</span></h1>
+	<div class="conn">
+		<input id="url" spellcheck="false" aria-label="게임 주소">
+		<button id="btnConnect">연결</button>
+		<span id="status" class="pill off"><span class="dot"></span><span id="statusText">끊김</span></span>
+	</div>
+	<div class="stats">
+		<span>장면 <b id="sScene">-</b></span>
+		<span>FPS <b id="sFps" class="num">-</b></span>
+		<span>seq <b id="sSeq" class="num">-</b></span>
+		<span>마지막 수신 <b id="sAge" class="num">-</b></span>
+		<span><b id="sRate" class="num">0</b> msg/s</span>
+		<button id="btnTheme" title="밝게/어둡게">테마</button>
+	</div>
+</header>
+
+<div class="clock" id="clock">
+	<div class="date" id="cDate">데이터 없음<small></small></div>
+	<div>
+		<div class="segs" id="cSegs"></div>
+		<div class="bar" style="margin-top:6px"><i id="cDayBar" style="width:0;background:var(--accent)"></i></div>
+	</div>
+	<div class="eclipse" id="cEclipse"></div>
+</div>
+
+<div class="kpis" id="kpis"></div>
+
+<h2>마을별 현황 <span class="sub">카드를 누르면 NPC 표가 그 지역으로 걸러진다</span></h2>
+<div class="grid" id="regions"><div class="empty">게임에서 스냅샷이 오면 채워진다</div></div>
+
+<h2>맵 · 몹</h2>
+<div class="grid" id="maps"></div>
+
+<h2>NPC 상태 <span class="sub" id="npcCount"></span></h2>
+<div class="toolbar">
+	<input id="fText" placeholder="이름 / id / 행동 검색">
+	<select id="fRegion"><option value="">모든 지역</option></select>
+	<select id="fFaction"><option value="">모든 소속</option></select>
+	<select id="fBand">
+		<option value="">모든 관계</option>
+		<option value="2">동맹</option><option value="1">우호</option><option value="0">중립</option>
+		<option value="-1">경계</option><option value="-2">적대</option>
+	</select>
+	<label class="muted"><input type="checkbox" id="fMap"> 현재 맵에 몸이 있는 NPC만</label>
+	<label class="muted"><input type="checkbox" id="fFlash" checked> 변화 강조</label>
+</div>
+<div class="tablewrap">
+	<table>
+		<thead><tr id="npcHead"></tr></thead>
+		<tbody id="npcBody"></tbody>
+	</table>
+</div>
+<div class="card detail" id="detail" hidden></div>
+
+<h2>로그</h2>
+<div class="split">
+	<div class="card"><div class="log" id="log"></div></div>
+	<div class="card">
+		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+			<span class="muted">마지막 메시지 (원본 JSON)</span>
+			<span><button id="btnCopy">복사</button> <button id="btnSave">스냅샷 저장</button></span>
+		</div>
+		<pre class="raw" id="raw">-</pre>
+	</div>
+</div>
+
+<div class="drop">스냅샷 JSON / JSONL 파일을 놓으면 그 내용을 보여 준다</div>
+
+<script>
+"use strict";
+
+// ---- 표시 이름 -----------------------------------------------------------------
+const SEASONS = ["여름", "가을", "겨울", "봄"];
+const SEGMENTS = ["새벽", "낮", "저녁", "밤"];
+const BANDS = { "-2": "적대", "-1": "경계", "0": "중립", "1": "우호", "2": "동맹" };
+const BAND_VARS = { "-2": "--band-hostile", "-1": "--band-wary", "0": "--band-neutral", "1": "--band-friendly", "2": "--band-ally" };
+const BEHAVIORS = { stay: "자리 지킴", wander: "어슬렁", hunt: "사냥", patrol: "순찰", rob: "약탈",
+	trade: "호객", travel: "이동", stalk: "따라붙음", scheme: "수군거림", gossip: "떠들기" };
+const QUESTS = { talk: "미라와 대화", hunt_small: "잡몹 사냥", beast: "호수의 큰 놈", cook: "요리", done: "완료" };
+const BOSS_STATES = { dormant: "잠듦", awake: "출현", caught: "포획됨" };
+const REGION_FIELDS = [
+	["prosperity", "번영", "--f-prosperity"],
+	["black", "검은 식탁", "--f-black"],
+	["unrest", "불만", "--f-unrest"],
+	["security", "치안", "--f-security"],
+];
+const VAR_NAMES = { player_power: "주인공 전력", player_grade: "요리사 등급", menu_count: "그랑 메뉴",
+	legends_eaten: "먹은 전설", tartu_size: "타르투", black_army: "검은 군대", fame: "명성" };
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const bandChip = (b) => `<span class="band" style="--c:var(${BAND_VARS[b]})">${BANDS[b] ?? b}</span>`;
+
+function store(key, value) {
+	try { if (value === undefined) return localStorage.getItem(key); localStorage.setItem(key, value); }
+	catch (e) { return null; }
+}
+
+// ---- 상태 ---------------------------------------------------------------------
+const state = {
+	snap: null,
+	prevNpcs: new Map(),     // npc id -> {band, action, region, alive, captured}
+	flashIds: new Set(),
+	noticeSerial: -1,
+	lastAt: 0,
+	stamps: [],              // 수신 시각 (msg/s 계산)
+	selRegion: "",
+	selNpc: null,
+	sortKey: "region",
+	sortAsc: true,
+	es: null,
+};
+
+// ---- 연결 ---------------------------------------------------------------------
+function defaultUrl() {
+	if (location.protocol.startsWith("http")) return location.origin;
+	return store("gg-monitor-url") || "http://127.0.0.1:7777";
+}
+
+function setStatus(kind, text) {
+	$("status").className = "pill " + kind;
+	$("statusText").textContent = text;
+}
+
+function connect() {
+	if (state.es) state.es.close();
+	const base = $("url").value.trim().replace(/\/+$/, "");
+	store("gg-monitor-url", base);
+	setStatus("wait", "연결 중");
+	let es;
+	try { es = new EventSource(base + "/events"); }
+	catch (e) { setStatus("off", "주소 오류"); return; }
+	state.es = es;
+	es.onopen = () => { setStatus("on", "연결됨"); addLog("sys", "연결: " + base); };
+	es.onerror = () => {
+		// EventSource 가 1초 뒤 스스로 다시 붙는다 (서버가 retry: 1000 을 보냄)
+		if (es.readyState === EventSource.CLOSED) setStatus("off", "끊김");
+		else setStatus("wait", "재연결 중");
+	};
+	es.onmessage = (ev) => {
+		let msg;
+		try { msg = JSON.parse(ev.data); }
+		catch (e) { addLog("sys", "JSON 파싱 실패: " + e.message); return; }
+		handle(msg, ev.data);
+	};
+}
+
+function handle(msg, rawText) {
+	const now = performance.now();
+	state.lastAt = now;
+	state.stamps.push(now);
+	$("raw").textContent = rawText.length > 200000 ? rawText.slice(0, 200000) + " …" : JSON.stringify(msg, null, 1);
+
+	switch (msg.t) {
+		case "hello":
+			addLog("sys", `게임 응답 (${msg.schema}, 포트 ${msg.port})`);
+			if (msg.schema !== "gg-monitor/1") addLog("sys", "알 수 없는 스키마 — 표시가 맞지 않을 수 있다");
+			break;
+		case "snapshot":
+			onSnapshot(msg);
+			break;
+		case "log":
+			addLog("log", msg.text);
+			break;
+		default:
+			addLog("sys", `알 수 없는 메시지 t=${msg.t}`);
+	}
+}
+
+// ---- 스냅샷 -------------------------------------------------------------------
+function onSnapshot(s) {
+	state.snap = s;
+	const sim = s.sim;
+
+	$("sScene").textContent = s.scene === "level1" ? "사냥터" : "고향 마을";
+	$("sFps").textContent = s.fps != null ? Math.round(s.fps) : "-";
+	$("sSeq").textContent = s.seq ?? "-";
+
+	if (sim) {
+		trackChanges(sim);
+		pumpNotices(sim.notices);
+	}
+	renderClock(sim);
+	renderKpis(s);
+	renderRegions(s);
+	renderMaps(s);
+	renderFilters(sim);
+	renderNpcs(s);
+	renderDetail(s);
+	state.flashIds = new Set();   // 다음 클릭·필터 갱신에서 다시 번쩍이지 않게
+}
+
+function trackChanges(sim) {
+	const flash = new Set();
+	for (const n of sim.npcs) {
+		const p = state.prevNpcs.get(n.id);
+		const cur = { band: n.band, action: n.action, region: n.region, alive: n.alive, captured: n.captured, faction: n.faction };
+		if (p) {
+			if (p.band !== cur.band) {
+				flash.add(n.id);
+				addLog("chg", `${n.name}: 관계 ${BANDS[p.band]} → ${BANDS[cur.band]}`);
+			}
+			if (p.action !== cur.action) flash.add(n.id);
+			if (p.region !== cur.region) { flash.add(n.id); addLog("chg", `${n.name}: ${regionName(p.region)} → ${regionName(cur.region)}`); }
+			if (p.faction !== cur.faction) { flash.add(n.id); addLog("chg", `${n.name}: 소속 ${factionName(p.faction)} → ${factionName(cur.faction)}`); }
+			if (p.alive && !cur.alive) addLog("chg", `${n.name} 사망`);
+			if (!p.captured && cur.captured) addLog("chg", `${n.name} 붙잡힘`);
+		}
+		state.prevNpcs.set(n.id, cur);
+	}
+	state.flashIds = flash;
+}
+
+function pumpNotices(notices) {
+	if (!notices) return;
+	if (state.noticeSerial < 0 || notices.serial < state.noticeSerial) {
+		// 첫 수신이거나 게임이 리셋됨: 남아 있는 것만 한 번 보여 준다
+		for (const n of notices.list) addLog("notice", `[${n.day}일] ${n.text}`);
+	} else {
+		const fresh = Math.min(notices.serial - state.noticeSerial, notices.list.length);
+		for (const n of notices.list.slice(notices.list.length - fresh)) addLog("notice", `[${n.day}일] ${n.text}`);
+	}
+	state.noticeSerial = notices.serial;
+}
+
+function regionName(id) {
+	const r = state.snap?.sim?.regions.find((x) => x.id === id);
+	return r ? r.name : (id ?? "-");
+}
+function factionName(id) {
+	if (!id) return "무소속";
+	const f = state.snap?.sim?.factions.find((x) => x.id === id);
+	return f ? f.name : id;
+}
+
+// ---- 시계 ---------------------------------------------------------------------
+function renderClock(sim) {
+	if (!sim) {
+		$("cDate").innerHTML = `Sim 없음<small>데이터 로드 실패 — 게임 콘솔을 확인</small>`;
+		$("cSegs").innerHTML = ""; $("cEclipse").innerHTML = "";
+		return;
+	}
+	const c = sim.clock;
+	$("cDate").innerHTML = `${c.year}년차 ${SEASONS[c.season]} ${c.dayOfSeason}일<small>절대일 ${c.day} · 하루 ${c.dayLength}초</small>`;
+	$("cSegs").innerHTML = SEGMENTS.map((name, i) => {
+		const cls = i === c.segment ? "cur" : (i < c.segment ? "past" : "");
+		const w = i === c.segment ? Math.round(c.segmentProgress * 100) : 0;
+		return `<div class="seg ${cls}"><i style="width:${w}%"></i><span>${name}</span></div>`;
+	}).join("");
+	$("cDayBar").style.width = (c.dayProgress * 100).toFixed(1) + "%";
+	const left = c.eclipseDay - c.day;
+	$("cEclipse").innerHTML = `<div class="muted" style="font-size:11px">미식 일식까지</div><b class="num">${left > 0 ? left + "일" : left === 0 ? "오늘" : "지남"}</b>` +
+		(c.paused ? ` <span class="tag warn">시계 정지</span>` : "");
+}
+
+// ---- KPI ----------------------------------------------------------------------
+function renderKpis(s) {
+	const sim = s.sim;
+	const out = [];
+	if (sim) {
+		const npcs = sim.npcs;
+		const alive = npcs.filter((n) => n.alive).length;
+		const captured = npcs.filter((n) => n.captured).length;
+		const onMap = (s.maps || []).reduce((a, m) => a + (m.active ? m.agents.filter((g) => g.present).length : 0), 0);
+		out.push(kpi("NPC", npcs.length, `생존 ${alive} · 포획 ${captured} · 사망 ${npcs.length - alive}`));
+		out.push(kpi("현재 맵 주민", onMap, "몸이 스폰된 NPC"));
+	}
+	const mobAlive = (s.maps || []).reduce((a, m) => a + (m.mobs?.alive ?? 0), 0);
+	const mobTotal = (s.maps || []).reduce((a, m) => a + (m.mobs?.total ?? 0), 0);
+	out.push(kpi("몹 (전체 맵)", mobAlive, `배치 ${mobTotal}`));
+	const act = (s.maps || []).find((m) => m.active);
+	if (act) out.push(kpi("몹 (현재 맵)", act.mobs.alive, `${act.name} · 배치 ${act.mobs.total}`));
+	if (sim) {
+		for (const k of ["fame", "black_army", "player_power"]) {
+			if (k in sim.vars) out.push(kpi(VAR_NAMES[k] || k, sim.vars[k], k));
+		}
+		if (sim.flags.length) out.push(kpi("켜진 플래그", sim.flags.length, sim.flags.slice(0, 4).join(", ") + (sim.flags.length > 4 ? " …" : "")));
+	}
+	$("kpis").innerHTML = out.join("");
+}
+const kpi = (k, v, d) => `<div class="kpi"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div><div class="d">${esc(d)}</div></div>`;
+
+// ---- 마을별 -------------------------------------------------------------------
+function renderRegions(s) {
+	const sim = s.sim;
+	if (!sim) { $("regions").innerHTML = `<div class="empty">Sim 데이터가 없다</div>`; return; }
+	const maps = s.maps || [];
+	$("regions").innerHTML = sim.regions.map((r) => {
+		const here = sim.npcs.filter((n) => n.region === r.id);
+		const homers = sim.npcs.filter((n) => n.home === r.id).length;
+		const alive = here.filter((n) => n.alive && !n.captured);
+		const captured = here.filter((n) => n.captured).length;
+		const dead = here.filter((n) => !n.alive).length;
+		const bands = [-2, -1, 0, 1, 2].map((b) => [b, alive.filter((n) => n.band === b).length]);
+		const map = maps.find((m) => m.region === r.id);
+
+		const acts = {};
+		for (const n of alive) if (n.actionName) acts[n.actionName] = (acts[n.actionName] || 0) + 1;
+		const topActs = Object.entries(acts).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${esc(k)} ${v}`).join(" · ");
+
+		const tags = [];
+		if (map) tags.push(`<span class="tag accent">맵</span>`);
+		else tags.push(`<span class="tag">전략 층</span>`);
+		if (map?.active) tags.push(`<span class="tag warn">플레이어</span>`);
+		if (r.closed) tags.push(`<span class="tag bad">폐쇄</span>`);
+
+		const mobsHtml = map
+			? `<div><div class="muted">몹</div><div class="big">${map.mobs.alive}<span class="faint" style="font-size:12px"> / ${map.mobs.total}</span></div>${map.mobs.respawning ? `<div class="faint">재출현 대기 ${map.mobs.respawning}</div>` : ""}</div>`
+			: `<div><div class="muted">몹</div><div class="faint" style="margin-top:3px">맵 없음</div></div>`;
+
+		return `<div class="card click ${state.selRegion === r.id ? "sel" : ""}" data-region="${esc(r.id)}">
+			<div class="head"><b>${esc(r.name)}</b><span class="id">${esc(r.id)}</span><span class="tags">${tags.join("")}</span></div>
+			${REGION_FIELDS.map(([k, label, color]) => `<div class="meter"><span>${label}</span><div class="bar"><i style="width:${clamp(r[k] ?? 0, 0, 100)}%;background:var(${color})"></i></div><span class="num">${r[k] ?? "-"}</span></div>`).join("")}
+			<div class="row2">
+				<div><div class="muted">NPC 체류</div><div class="big">${alive.length}<span class="faint" style="font-size:12px"> / 출신 ${homers}</span></div>${captured || dead ? `<div class="faint">포획 ${captured} · 사망 ${dead}</div>` : ""}</div>
+				${mobsHtml}
+			</div>
+			<div class="bands">${alive.length ? bands.map(([b, n]) => n ? `<i style="width:${n / alive.length * 100}%;background:var(${BAND_VARS[b]})" title="${BANDS[b]} ${n}"></i>` : "").join("") : ""}</div>
+			<div class="legend">${bands.filter(([, n]) => n).map(([b, n]) => `<span style="--c:var(${BAND_VARS[b]})">${BANDS[b]} ${n}</span>`).join("") || `<span class="faint">NPC 없음</span>`}</div>
+			${topActs ? `<div class="acts">오늘: ${topActs}</div>` : ""}
+		</div>`;
+	}).join("");
+}
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// ---- 맵 / 몹 ------------------------------------------------------------------
+function renderMaps(s) {
+	const maps = s.maps || [];
+	if (!maps.length) { $("maps").innerHTML = `<div class="empty">맵 정보 없음</div>`; return; }
+	$("maps").innerHTML = maps.map((m) => {
+		const mb = m.mobs || { species: [] };
+		const extra = [];
+		if (mb.respawning != null) extra.push(`재출현 대기 ${mb.respawning}`);
+		if (mb.claimed != null) extra.push(`주민이 노리는 중 ${mb.claimed}`);
+		if (mb.killed != null) extra.push(`처치 ${mb.killed}`);
+		if (mb.aggro != null) extra.push(`추격 중 ${mb.aggro}`);
+		if (mb.playerCatches != null) extra.push(`플레이어 포획 ${mb.playerCatches}`);
+		if (mb.npcCatches != null) extra.push(`주민 포획 ${mb.npcCatches}`);
+		if (m.robberies != null) extra.push(`약탈 ${m.robberies}`);
+
+		const p = m.player;
+		const pInfo = p ? `플레이어 (${p.x.toFixed(1)}, ${p.y.toFixed(1)})` + (p.level != null ? ` · Lv ${p.level} · HP ${p.hp}/${p.maxHp}` : "") : "";
+
+		return `<div class="card">
+			<div class="head"><b>${esc(m.name)}</b><span class="id">${esc(m.id)}</span>
+				<span class="tags">${m.active ? `<span class="tag warn">현재 장면</span>` : `<span class="tag">정지</span>`}${m.region ? `<span class="tag">${esc(regionName(m.region))}</span>` : ""}</span></div>
+			<div class="row2" style="margin-top:0;margin-bottom:8px">
+				<div><div class="muted">살아 있는 몹</div><div class="big">${mb.alive ?? "-"}<span class="faint" style="font-size:12px"> / ${mb.total ?? "-"}</span></div></div>
+				<div style="text-align:right"><div class="muted">주민 몸</div><div class="big">${m.agents ? m.agents.filter((g) => g.present).length : 0}</div></div>
+			</div>
+			${(mb.species || []).map((sp) => `<div class="sp"><span>${esc(sp.name)}${sp.grade ? ` <span class="faint">포획 ${sp.grade}</span>` : ""}${sp.hostile ? ` <span class="tag bad">선공</span>` : ""}</span>
+				<div class="bar"><i style="width:${sp.total ? sp.alive / sp.total * 100 : 0}%;background:var(--accent)"></i></div>
+				<span class="num">${sp.alive}/${sp.total}</span></div>`).join("")}
+			${(m.bosses || []).map((b) => `<div class="sp"><span>${esc(b.name)} <span class="faint">포획 ${b.grade}</span></span><span></span><span class="tag ${b.state === "awake" ? "warn" : ""}">${BOSS_STATES[b.state] || b.state}</span></div>`).join("")}
+			<div class="acts">${extra.join(" · ")}</div>
+			${m.quest || pInfo ? `<div class="acts">${m.quest ? "퀘스트: " + esc(QUESTS[m.quest] || m.quest) + (pInfo ? " · " : "") : ""}${esc(pInfo)}</div>` : ""}
+		</div>`;
+	}).join("");
+}
+
+// ---- NPC 표 -------------------------------------------------------------------
+const COLS = [
+	{ key: "name", label: "이름", get: (n) => n.name },
+	{ key: "faction", label: "소속", get: (n) => factionName(n.faction) },
+	{ key: "region", label: "지역", get: (n) => n.region ?? "" },
+	{ key: "band", label: "관계", get: (n) => n.band, num: true },
+	{ key: "affinity", label: "친화", get: (n) => n.affinity, num: true, r: true },
+	{ key: "trust", label: "신뢰", get: (n) => n.trust, num: true, r: true },
+	{ key: "power", label: "전력", get: (n) => n.power, num: true, r: true },
+	{ key: "action", label: "오늘 행동", get: (n) => n.actionName ?? "" },
+	{ key: "body", label: "몸 (현재 맵)", get: (n) => agentOf(n.i)?.behavior ?? "~" },
+	{ key: "state", label: "상태", get: (n) => (n.alive ? 0 : 2) + (n.captured ? 1 : 0), num: true },
+];
+
+let agentIndex = new Map();
+function agentOf(i) { return agentIndex.get(i); }
+
+function buildAgentIndex(s) {
+	agentIndex = new Map();
+	for (const m of s.maps || []) {
+		if (!m.active) continue;   // 정지한 맵의 몸은 지금 화면에 없다
+		for (const g of m.agents || []) agentIndex.set(g.npc, { ...g, map: m.id });
+	}
+}
+
+function renderFilters(sim) {
+	if (!sim) return;
+	fillSelect($("fRegion"), sim.regions.map((r) => [r.id, r.name]), "모든 지역");
+	fillSelect($("fFaction"), [["none", "무소속"], ...sim.factions.map((f) => [f.id, f.name])], "모든 소속");
+	if ($("fRegion").value !== state.selRegion) $("fRegion").value = state.selRegion;
+}
+
+function fillSelect(sel, items, allLabel) {
+	const sig = items.map((x) => x[0]).join("|");
+	if (sel.dataset.sig === sig) return;
+	const cur = sel.value;
+	sel.innerHTML = `<option value="">${allLabel}</option>` + items.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join("");
+	sel.dataset.sig = sig;
+	sel.value = cur;
+}
+
+function renderNpcs(s) {
+	const sim = s.sim;
+	buildAgentIndex(s);
+	$("npcHead").innerHTML = COLS.map((c) => `<th data-key="${c.key}" class="${c.r ? "r" : ""} ${state.sortKey === c.key ? "sorted" + (state.sortAsc ? " asc" : "") : ""}">${c.label}</th>`).join("");
+	if (!sim) { $("npcBody").innerHTML = ""; $("npcCount").textContent = ""; return; }
+
+	const text = $("fText").value.trim().toLowerCase();
+	const fr = $("fRegion").value, ff = $("fFaction").value, fb = $("fBand").value, fm = $("fMap").checked;
+	let rows = sim.npcs.filter((n) => {
+		if (fr && n.region !== fr) return false;
+		if (ff && (ff === "none" ? n.faction : n.faction !== ff)) return false;
+		if (fb !== "" && n.band !== Number(fb)) return false;
+		if (fm && !agentOf(n.i)) return false;
+		if (text) {
+			const hay = `${n.name} ${n.id} ${n.title} ${n.actionName ?? ""} ${n.action ?? ""}`.toLowerCase();
+			if (!hay.includes(text)) return false;
+		}
+		return true;
+	});
+
+	const col = COLS.find((c) => c.key === state.sortKey) || COLS[0];
+	rows.sort((a, b) => {
+		let va = col.get(a), vb = col.get(b);
+		let d = col.num ? va - vb : String(va).localeCompare(String(vb), "ko");
+		if (d === 0) d = a.i - b.i;   // 정의 순서
+		return state.sortAsc ? d : -d;
+	});
+
+	$("npcCount").textContent = `${rows.length} / ${sim.npcs.length}`;
+	const flash = $("fFlash").checked ? state.flashIds : new Set();
+	$("npcBody").innerHTML = rows.map((n) => {
+		const g = agentOf(n.i);
+		const st = !n.alive ? `<span class="tag bad">사망</span>` : n.captured ? `<span class="tag warn">포획됨</span>` :
+			g ? (g.indoor ? `<span class="tag">실내</span>` : g.present ? `<span class="tag accent">맵 위</span>` : `<span class="tag">부재</span>`) : `<span class="faint">-</span>`;
+		const body = g ? `${esc(BEHAVIORS[g.behavior] || g.behavior || "-")} <span class="faint">${esc(g.loc || "")}</span>` : `<span class="faint">-</span>`;
+		const affW = Math.abs(n.affinity) / 2;
+		const affL = n.affinity >= 0 ? 50 : 50 - affW;
+		return `<tr data-id="${esc(n.id)}" class="${state.selNpc === n.id ? "sel" : ""} ${!n.alive || n.captured ? "dead" : ""} ${flash.has(n.id) ? "flash" : ""}">
+			<td class="who"><b>${esc(n.name)}</b><small>${esc(n.title)}</small></td>
+			<td>${esc(factionName(n.faction))}</td>
+			<td>${esc(regionName(n.region))}${n.region !== n.home ? ` <span class="faint">(출신 ${esc(regionName(n.home))})</span>` : ""}</td>
+			<td>${bandChip(n.band)}</td>
+			<td class="r"><span class="aff"><span class="num">${n.affinity}</span><span class="bar"><i style="left:${affL}%;width:${affW}%;background:var(${BAND_VARS[n.band]})"></i></span></span></td>
+			<td class="r num">${n.trust}</td>
+			<td class="r num">${n.power}</td>
+			<td>${esc(n.actionName ?? "-")} ${n.score != null ? `<span class="faint num">${n.score}</span>` : ""}</td>
+			<td>${body}</td>
+			<td>${st}</td>
+		</tr>`;
+	}).join("") || `<tr><td colspan="${COLS.length}" class="empty">조건에 맞는 NPC가 없다</td></tr>`;
+}
+
+function renderDetail(s) {
+	const box = $("detail");
+	const n = s.sim?.npcs.find((x) => x.id === state.selNpc);
+	if (!n) { box.hidden = true; return; }
+	box.hidden = false;
+	const g = agentOf(n.i);
+	const traitNames = ["욕망 (절제↔탐욕)", "규범 (실리↔원칙)", "기질 (신중↔대담)"];
+	const kv = (k, v) => `<div class="kv"><span>${k}</span><span class="num">${v}</span></div>`;
+	box.innerHTML = `
+		<div class="head" style="display:flex;gap:8px;align-items:baseline;margin-bottom:8px">
+			<b style="font-size:15px">${esc(n.name)}</b><span class="muted">${esc(n.title)}</span><span class="faint num">${esc(n.id)} · #${n.i}</span>
+			<span style="margin-left:auto">${bandChip(n.band)} <button id="btnClose">닫기</button></span>
+		</div>
+		<div class="cols">
+			<div>
+				${kv("소속", esc(factionName(n.faction)))}
+				${kv("현재 지역 / 출신", `${esc(regionName(n.region))} / ${esc(regionName(n.home))}`)}
+				${kv("목표 태그", esc(n.goal || "-"))}
+				${kv("오늘 행동", `${esc(n.actionName ?? "-")} <span class="faint">(${esc(n.action ?? "-")}, 점수 ${n.score ?? "-"})</span>`)}
+				${kv("몸짓 (일과 층)", g ? `${esc(BEHAVIORS[g.behavior] || g.behavior)} @ ${esc(g.loc || "-")}` : "-")}
+				${kv("위치", g ? `(${g.x.toFixed(1)}, ${g.y.toFixed(1)})${g.walking ? " 이동 중" : ""}` : "-")}
+			</div>
+			<div>
+				${kv("유효 친화도", n.affinity)}
+				${kv("개인 친화도", n.rawAffinity)}
+				${kv("신뢰도", n.trust)}
+				${kv("전력", n.power)}
+				${kv("meter / mark", `${n.meter} / ${n.mark}`)}
+				${kv("생존 / 포획", `${n.alive ? "생존" : "사망"} / ${n.captured ? "포획됨" : "-"}`)}
+			</div>
+			<div>
+				${n.traits.map((t, k) => `<div class="trait"><span class="muted">${traitNames[k]}</span>
+					<div class="scale">${[-2, -1, 0, 1, 2].map((v) => `<i class="${(t < 0 ? v >= t && v <= 0 : v <= t && v >= 0) && v !== 0 ? "on" : ""} ${v === 0 ? "mid" : ""}"></i>`).join("")}</div>
+					<span class="num">${t > 0 ? "+" + t : t}</span></div>`).join("")}
+			</div>
+		</div>`;
+	$("btnClose").onclick = () => { state.selNpc = null; renderAll(); };
+}
+
+function renderAll() { if (state.snap) onSnapshotRender(); }
+function onSnapshotRender() {
+	const s = state.snap;
+	renderRegions(s); renderNpcs(s); renderDetail(s);
+}
+
+// ---- 로그 ---------------------------------------------------------------------
+const LOG_MAX = 300;
+function addLog(kind, text) {
+	const el = document.createElement("div");
+	el.className = "k-" + (kind === "notice" ? "notice" : kind === "sys" ? "sys" : "log");
+	const t = new Date();
+	const hh = String(t.getHours()).padStart(2, "0"), mm = String(t.getMinutes()).padStart(2, "0"), ss = String(t.getSeconds()).padStart(2, "0");
+	el.innerHTML = `<span>${hh}:${mm}:${ss}</span><span>${esc(text)}</span>`;
+	const log = $("log");
+	log.prepend(el);
+	while (log.childElementCount > LOG_MAX) log.lastElementChild.remove();
+}
+
+// ---- 이벤트 -------------------------------------------------------------------
+$("url").value = defaultUrl();
+$("btnConnect").onclick = connect;
+$("url").addEventListener("keydown", (e) => { if (e.key === "Enter") connect(); });
+
+$("regions").addEventListener("click", (e) => {
+	const card = e.target.closest("[data-region]");
+	if (!card) return;
+	const id = card.dataset.region;
+	state.selRegion = state.selRegion === id ? "" : id;
+	$("fRegion").value = state.selRegion;
+	renderAll();
+});
+$("npcHead").addEventListener("click", (e) => {
+	const th = e.target.closest("th");
+	if (!th) return;
+	if (state.sortKey === th.dataset.key) state.sortAsc = !state.sortAsc;
+	else { state.sortKey = th.dataset.key; state.sortAsc = !COLS.find((c) => c.key === th.dataset.key).num; }
+	renderAll();
+});
+$("npcBody").addEventListener("click", (e) => {
+	const tr = e.target.closest("tr[data-id]");
+	if (!tr) return;
+	state.selNpc = state.selNpc === tr.dataset.id ? null : tr.dataset.id;
+	renderAll();
+});
+for (const id of ["fText", "fFaction", "fBand", "fMap", "fFlash"]) $(id).addEventListener("input", renderAll);
+$("fRegion").addEventListener("input", () => { state.selRegion = $("fRegion").value; renderAll(); });
+
+$("btnCopy").onclick = () => navigator.clipboard?.writeText($("raw").textContent);
+$("btnSave").onclick = () => {
+	if (!state.snap) return;
+	const blob = new Blob([JSON.stringify(state.snap)], { type: "application/json" });
+	const a = document.createElement("a");
+	a.href = URL.createObjectURL(blob);
+	a.download = `snapshot_day${state.snap.sim?.clock.day ?? "x"}_seq${state.snap.seq}.json`;
+	a.click();
+	setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+$("btnTheme").onclick = () => {
+	const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+	document.documentElement.dataset.theme = next;
+	store("gg-monitor-theme", next);
+};
+if (store("gg-monitor-theme") === "light") document.documentElement.dataset.theme = "light";
+
+// 파일 끌어다 놓기: .json(스냅샷 하나) 또는 .jsonl(메시지 여러 줄)
+let dragDepth = 0;
+addEventListener("dragenter", (e) => { e.preventDefault(); dragDepth++; document.body.classList.add("dragging"); });
+addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("dragging"); } });
+addEventListener("dragover", (e) => e.preventDefault());
+addEventListener("drop", async (e) => {
+	e.preventDefault(); dragDepth = 0; document.body.classList.remove("dragging");
+	const file = e.dataTransfer.files[0];
+	if (!file) return;
+	const text = await file.text();
+	const lines = text.trim().startsWith("{") && !text.includes("\n{") ? [text] : text.split(/\r?\n/).filter((l) => l.trim());
+	if (state.es) { state.es.close(); state.es = null; setStatus("off", "파일 보기"); }
+	let ok = 0;
+	for (const l of lines) { try { handle(JSON.parse(l), l); ok++; } catch (err) { /* 줄 하나가 깨져도 나머지는 본다 */ } }
+	addLog("sys", `${file.name}: 메시지 ${ok}개 읽음`);
+});
+
+// 마지막 수신 경과, 초당 메시지 수
+setInterval(() => {
+	const now = performance.now();
+	state.stamps = state.stamps.filter((t) => now - t < 5000);
+	$("sRate").textContent = (state.stamps.length / 5).toFixed(1);
+	if (!state.lastAt) return;
+	const age = (now - state.lastAt) / 1000;
+	$("sAge").textContent = age < 1 ? "방금" : age.toFixed(0) + "초 전";
+	$("sAge").style.color = age > 3 ? "var(--bad)" : "";
+}, 500);
+
+connect();
+</script>
+</body>
+</html>
