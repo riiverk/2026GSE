@@ -24,7 +24,8 @@ ATLAS_W = 4096
 DIRS = ['s', 'se', 'e', 'ne', 'n']
 
 # 아틀라스에 넣는 순서 (sprites.txt 순서). 엔진은 이름으로 찾으므로 순서는 자유
-ORDER = ['rino', 'tartu', 'tomatoma', 'house', 'tree', 'pot', 'dish']
+ORDER = ['rino', 'tartu', 'tomatoma', 'potato', 'bean', 'mush', 'lakedeer', 'house', 'tree',
+	'pot', 'dish', 'props']
 
 
 def load(path):

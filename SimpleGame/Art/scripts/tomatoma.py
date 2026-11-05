@@ -19,6 +19,7 @@ STAGE = os.environ.get('GG_STAGE', 'all')
 
 G.reset(samples=40)
 G.light_rig()
+G.MATTE = 1.0      # 캐릭터·몬스터는 반사광을 한 단계 죽인다 (음식은 그대로)
 
 R = 0.235           # 가로 반지름
 H = 0.185           # 세로 반높이

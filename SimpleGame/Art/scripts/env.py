@@ -23,34 +23,36 @@ STAGE = os.environ.get('GG_STAGE', 'all')
 random.seed(7)
 
 
-def mats_common():
+def mats_common(prefix=None):
+	# prefix 가 있으면 머티리얼 이름 접두어 (props.py 처럼 여러 에셋이 한 씬에 있을 때)
+	WHAT_ = prefix or WHAT
 	M = {}
-	M['plaster'] = G.proc_mat(WHAT + '_plaster', lin((0.93, 0.87, 0.75)), lin((0.86, 0.76, 0.62)),
+	M['plaster'] = G.proc_mat(WHAT_ + '_plaster', lin((0.93, 0.87, 0.75)), lin((0.86, 0.76, 0.62)),
 		var_scale=2.2, var_amt=0.7, rough=0.9, rough_var=0.05,
 		macro=('noise', 7.0, 4.0, 0.6), macro_amt=0.8, cavity=0.18, normal_strength=0.8,
 		micro=('noise', 120.0, 6.0), bump_strength=0.25, height_scale=0.012)
-	M['stone'] = G.proc_mat(WHAT + '_stone', lin((0.72, 0.68, 0.60)), lin((0.58, 0.54, 0.47)),
+	M['stone'] = G.proc_mat(WHAT_ + '_stone', lin((0.72, 0.68, 0.60)), lin((0.58, 0.54, 0.47)),
 		var_scale=6, var_amt=0.7, rough=0.85,
 		macro=('cells', 9.0, 7.0), macro_amt=1.0, cavity=0.35, normal_strength=1.0,
 		micro=('noise', 90.0, 5.0), bump_strength=0.3, height_scale=0.02)
-	M['terracotta'] = G.proc_mat(WHAT + '_terracotta', lin((0.80, 0.40, 0.25)),
+	M['terracotta'] = G.proc_mat(WHAT_ + '_terracotta', lin((0.80, 0.40, 0.25)),
 		lin((0.66, 0.30, 0.18)), var_scale=5, var_amt=0.8, rough=0.7, rough_var=0.12,
 		macro=('noise', 14.0, 3.0), macro_amt=0.5, cavity=0.2, normal_strength=0.5,
 		micro=('noise', 160.0, 4.0), bump_strength=0.2, height_scale=0.008)
-	M['wood'] = G.proc_mat(WHAT + '_wood', lin((0.55, 0.39, 0.25)), lin((0.42, 0.29, 0.18)),
+	M['wood'] = G.proc_mat(WHAT_ + '_wood', lin((0.55, 0.39, 0.25)), lin((0.42, 0.29, 0.18)),
 		var_scale=7, var_amt=0.6, rough=0.65, macro=('grain', 22.0, 'Z'), macro_amt=0.8,
 		cavity=0.25, normal_strength=0.8, micro=('noise', 150.0), bump_strength=0.15,
 		height_scale=0.008)
-	M['iron'] = G.proc_mat(WHAT + '_iron', lin((0.17, 0.16, 0.17)), lin((0.24, 0.20, 0.18)),
+	M['iron'] = G.proc_mat(WHAT_ + '_iron', lin((0.17, 0.16, 0.17)), lin((0.24, 0.20, 0.18)),
 		var_scale=8, var_amt=0.5, rough=0.55, rough_var=0.15, metallic=0.85,
 		macro=('noise', 30.0, 4.0), macro_amt=0.6, cavity=0.2, normal_strength=0.6,
 		micro=('noise', 220.0, 3.0), bump_strength=0.15, height_scale=0.006)
-	M['leaf'] = G.proc_mat(WHAT + '_leaf', lin((0.42, 0.54, 0.28)), lin((0.30, 0.40, 0.24)),
+	M['leaf'] = G.proc_mat(WHAT_ + '_leaf', lin((0.42, 0.54, 0.28)), lin((0.30, 0.40, 0.24)),
 		var_scale=3, var_amt=0.8, rough=0.6, rough_var=0.1,
 		macro=('pebbles', 16.0), macro_amt=1.0, cavity=0.45, normal_strength=1.4,
 		micro=('noise', 120.0, 3.0), bump_strength=0.2, sheen=0.4, sss=0.12,
 		sss_radius=(0.3, 0.6, 0.2), height_scale=0.03)
-	M['bark'] = G.proc_mat(WHAT + '_bark', lin((0.42, 0.33, 0.25)), lin((0.30, 0.24, 0.19)),
+	M['bark'] = G.proc_mat(WHAT_ + '_bark', lin((0.42, 0.33, 0.25)), lin((0.30, 0.24, 0.19)),
 		var_scale=6, var_amt=0.7, rough=0.9, macro=('wave', 10.0, 8.0, 'Z'), macro_amt=0.9,
 		cavity=0.35, normal_strength=1.0, micro=('noise', 120.0, 5.0), bump_strength=0.25,
 		height_scale=0.02)
@@ -475,70 +477,71 @@ def build_dish():
 # =============================================================================
 # 실행
 # =============================================================================
-G.reset(samples=64)
-G.light_rig()
+if __name__ == '__main__':
+	G.reset(samples=64)
+	G.light_rig()
 
-if WHAT == 'house':
-	house, M = build_house()
-	if STAGE == 'model':
-		model_preview('house', (600, 600), (300, 470), 3)
-		sys.exit(0)
-	G.smart_uv(house, margin=0.003)
-	G.bake_asset_textures(house, 'house', res=2048)
-	render_set('house', [('house', (300, 330), (150, 250), None)])
-	G.save_blend('house')
+	if WHAT == 'house':
+		house, M = build_house()
+		if STAGE == 'model':
+			model_preview('house', (600, 600), (300, 470), 3)
+			sys.exit(0)
+		G.smart_uv(house, margin=0.003)
+		G.bake_asset_textures(house, 'house', res=2048)
+		render_set('house', [('house', (300, 330), (150, 250), None)])
+		G.save_blend('house')
 
-elif WHAT == 'tree':
-	tree, M = build_tree()
-	if STAGE == 'model':
-		model_preview('tree', (500, 600), (250, 520), 3)
-		sys.exit(0)
-	G.smart_uv(tree, margin=0.004)
-	G.bake_asset_textures(tree, 'tree', res=1024)
-	render_set('tree', [('tree', (300, 380), (150, 320), None)])
-	G.save_blend('tree')
+	elif WHAT == 'tree':
+		tree, M = build_tree()
+		if STAGE == 'model':
+			model_preview('tree', (500, 600), (250, 520), 3)
+			sys.exit(0)
+		G.smart_uv(tree, margin=0.004)
+		G.bake_asset_textures(tree, 'tree', res=1024)
+		render_set('tree', [('tree', (300, 380), (150, 320), None)])
+		G.save_blend('tree')
 
-elif WHAT == 'pot':
-	hearth, cauldron, M = build_pot()
-	if STAGE == 'model':
-		model_preview('pot', (500, 500), (250, 360), 5)
-		sys.exit(0)
-	for ob, nm in ((hearth, 'hearth'), (cauldron, 'cauldron')):
-		G.smart_uv(ob, margin=0.004)
-		G.bake_asset_textures(ob, nm, res=1024)
-	render_set('pot', [('pot_hearth', (150, 130), (75, 90), [hearth]),
-		('pot_cauldron', (150, 180), (75, 140), [cauldron])])
-	G.save_blend('pot')
+	elif WHAT == 'pot':
+		hearth, cauldron, M = build_pot()
+		if STAGE == 'model':
+			model_preview('pot', (500, 500), (250, 360), 5)
+			sys.exit(0)
+		for ob, nm in ((hearth, 'hearth'), (cauldron, 'cauldron')):
+			G.smart_uv(ob, margin=0.004)
+			G.bake_asset_textures(ob, nm, res=1024)
+		render_set('pot', [('pot_hearth', (150, 130), (75, 90), [hearth]),
+			('pot_cauldron', (150, 180), (75, 140), [cauldron])])
+		G.save_blend('pot')
 
-elif WHAT == 'dish':
-	dish, M = build_dish()
-	if STAGE == 'model':
-		model_preview('dish', (500, 500), (250, 320), 9)
-		sys.exit(0)
-	G.smart_uv(dish, margin=0.004)
-	G.bake_asset_textures(dish, 'dish', res=1024)
-	render_set('dish', [('dish_icon', (100, 90), (50, 60), None)])
-	# ---- 클로즈업: 음식 사진처럼. 45도 원근, 얕은 심도, 뒤에서 오는 림 ----
-	s = bpy.context.scene
-	s.cycles.samples = 256
-	cd = bpy.data.cameras.new('Close')
-	cam = bpy.data.objects.new('CloseCam', cd)
-	G.link(cam)
-	cd.lens = 60
-	cd.dof.use_dof = True
-	cd.dof.aperture_fstop = 3.5
-	cd.dof.focus_distance = 1.75
-	cam.location = (0.04, -1.30, 1.18)
-	cam.rotation_euler = (math.radians(47), 0, 0)
-	s.camera = cam
-	s.render.resolution_x = 512
-	s.render.resolution_y = 512
-	G.render_sprite(os.path.join(G.ROOT, 'renders', 'dish'), 'dish_closeup')
-	import json
-	mp = os.path.join(G.ROOT, 'renders', 'dish', 'meta.json')
-	meta = json.load(open(mp))
-	meta['statics'].append(dict(name='dish_closeup', canvas=[512, 512], pivot=[256, 256], ui=True))
-	json.dump(meta, open(mp, 'w'), indent=1)
-	G.save_blend('dish')
+	elif WHAT == 'dish':
+		dish, M = build_dish()
+		if STAGE == 'model':
+			model_preview('dish', (500, 500), (250, 320), 9)
+			sys.exit(0)
+		G.smart_uv(dish, margin=0.004)
+		G.bake_asset_textures(dish, 'dish', res=1024)
+		render_set('dish', [('dish_icon', (100, 90), (50, 60), None)])
+		# ---- 클로즈업: 음식 사진처럼. 45도 원근, 얕은 심도, 뒤에서 오는 림 ----
+		s = bpy.context.scene
+		s.cycles.samples = 256
+		cd = bpy.data.cameras.new('Close')
+		cam = bpy.data.objects.new('CloseCam', cd)
+		G.link(cam)
+		cd.lens = 60
+		cd.dof.use_dof = True
+		cd.dof.aperture_fstop = 3.5
+		cd.dof.focus_distance = 1.75
+		cam.location = (0.04, -1.30, 1.18)
+		cam.rotation_euler = (math.radians(47), 0, 0)
+		s.camera = cam
+		s.render.resolution_x = 512
+		s.render.resolution_y = 512
+		G.render_sprite(os.path.join(G.ROOT, 'renders', 'dish'), 'dish_closeup')
+		import json
+		mp = os.path.join(G.ROOT, 'renders', 'dish', 'meta.json')
+		meta = json.load(open(mp))
+		meta['statics'].append(dict(name='dish_closeup', canvas=[512, 512], pivot=[256, 256], ui=True))
+		json.dump(meta, open(mp, 'w'), indent=1)
+		G.save_blend('dish')
 
-print('[env] done', WHAT)
+	print('[env] done', WHAT)

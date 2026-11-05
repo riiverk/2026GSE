@@ -124,6 +124,8 @@
 - 조명은 `ggcommon.light_rig()` 하나를 전 에셋이 공유한다 (화면 좌상단·앞에서 오는 키). 바닥 그림자는 굽지 않는다 — 엔진의 `DrawShadow` 가 그린다
 - 캐릭터는 화면 5방향(s, se, e, ne, n)만 굽고 nw/w/sw 는 좌우 반전 (`SpriteAtlas::SpriteDirFromWorld`)
 - 스프라이트는 2배(타르투 3배)로 구워 1배로 줄여 그린다. 아틀라스는 밉맵 + 프레임 간 여백 4px
+- 캐릭터·몬스터 스크립트는 `G.MATTE = 1.0` 으로 반사광(러프니스·스펙큘러·코트·시인)을 한 단계 죽인다. 음식·환경은 0 (윤기 유지)
+- 에셋 목록: 리노·타르투(캐릭터), 토마토마·알감자·방울콩·버섯당(잡몹, 같은 리그), 호수사슴, 집·나무·화덕+솥·요리, 소품 20종(`props.py`). 주민은 아직 SDF
 - `Game.cpp` 의 `USE_BLENDER_SPRITES` 를 false 로 두면 예전 SDF 그림으로 돌아간다. 아틀라스를 못 읽어도 자동으로 SDF
 - 새 에셋: 스크립트 작성 → 렌더 → `pack_atlas.py` → `Data/Sprites` 갱신 → `Game.cpp` 에서 `FindAnim/FindSprite`
 

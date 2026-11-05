@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 OUT = sys.argv[1] if len(sys.argv) > 1 else 'mock_scene.png'
 import os
-SP = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Data', 'Sprites') + '/'
+SP = os.environ.get('GG_SPRITES', os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'Data', 'Sprites')) + '/'
 atlas = Image.open(SP + 'sprites.png').convert('RGBA')
 AW, AH = atlas.size
 anims = {}; statics = {}; cur = None; scale = 1
@@ -65,6 +65,20 @@ items.append((cam[0] + cam[1], 'rino', cam[0], cam[1], (1, 1)))
 items.append((cam[0] - 1.1 + cam[1] - 0.3, 'tartu', cam[0] - 1.1, cam[1] - 0.3, (1, 0.2)))
 for k, (x, y, dx, dy) in enumerate([(66, 67, 1, 0), (67.5, 68.5, -1, 0.3), (62, 71, 0, 1)]):
     items.append((x + y, 'tom', x, y, (dx, dy, k)))
+# 소품·잡몹·사슴 (있을 때만)
+extra_props = [('pine', 52, 72), ('bush', 58.5, 75.5), ('rock', 60.5, 74.2), ('well', 69, 66),
+	('crate', 70.5, 69), ('barrel', 71.2, 68.2), ('fence', 62, 65.2), ('fence', 62.8, 64.4),
+	('vine_grapes', 75, 72), ('vine', 76, 71), ('reed', 70, 77), ('herb', 63, 70.5),
+	('tent_canvas', 55, 62), ('tent_red', 57.5, 60.5), ('wagon', 74, 66.5), ('stall_1', 67.5, 63.2),
+	('stall_3', 69.5, 62.2), ('campfire', 59, 67.5)]
+for (nm, x, y) in extra_props:
+	if nm in statics:
+		items.append((x + y, 'static', x, y, nm))
+for k, (sp, x, y) in enumerate([('potato', 61, 69), ('bean', 65.5, 70.5), ('mush', 60, 71.5)]):
+	if sp + '.idle' in anims:
+		items.append((x + y, 'mob', x, y, sp))
+if 'lakedeer.idle' in anims:
+	items.append((72 + 73, 'deer', 72, 73, None))
 items.sort(key=lambda t: t[0])
 for _, kind, x, y, extra in items:
     sx, sy = iso(x, y)
@@ -82,9 +96,17 @@ for _, kind, x, y, extra in items:
     elif kind == 'tartu':
         di, fl = dir_from_world(*extra); a = anims['tartu.sniff']; shadow(sx, sy, 28, 11, 0.3)
         draw(a['f'][di * a['frames'] + 3], sx, sy, 1.15, fl)
+    elif kind == 'static':
+        draw(statics[extra]['f'][0], sx, sy)
+    elif kind == 'mob':
+        a = anims[extra + '.idle']; shadow(sx + 2, sy + 1, 36, 15, 0.28)
+        draw(a['f'][0], sx, sy, 1.3)
+    elif kind == 'deer':
+        a = anims['lakedeer.idle']; shadow(sx + 4, sy + 2, 82, 32, 0.34)
+        draw(a['f'][3 * a['frames']], sx, sy, 1.0, True)
     elif kind == 'tom':
         di, fl = dir_from_world(extra[0], extra[1]); a = anims['tomatoma.hop' if extra[2] != 1 else 'tomatoma.idle']; shadow(sx + 2, sy + 1, 30, 13, 0.28)
-        draw(a['f'][di * a['frames'] + 2], sx, sy, 1.0, fl)
+        draw(a['f'][di * a['frames'] + 2], sx, sy, 1.3, fl)
 cl = statics['dish_closeup']['f'][0]
 img.save(OUT)
 # 클로즈업 별도

@@ -26,6 +26,9 @@
 | 나무 `tree` | 5본 바람 리그 (`tree_wind` 액션) | 정적 (흔들림은 엔진 `SetSway`) |
 | 화덕 + 솥 `pot` | — | `pot_hearth`, `pot_cauldron` 두 장 (사이에 엔진 불꽃) |
 | 요리 `dish` | — | `dish_icon` (월드), `dish_closeup` (조리 완료 화면) |
+| 알감자 `potato` · 방울콩 `bean` · 버섯당 `mush` | 토마토마와 같은 6본 | idle 6 · hop 8 · caught 8 (`critters.py`) |
+| 호수사슴 `lakedeer` | 15본 (몸·목·머리·귀·꼬리·다리8) | idle 8 |
+| 소품 `props` | — | 소나무, 덤불, 바위, 우물, 상자, 술통, 울타리, 포도나무(+송이), 갈대, 햇살풀, 천막 2색, 포장마차, 노점 5색, 모닥불 (`props.py`) |
 
 ## 다시 만들기
 
@@ -38,6 +41,9 @@ python rino.py              # 리노 → blend/rino.blend, textures/rino, render
 python tartu.py
 python tomatoma.py
 python env.py house         # house | tree | pot | dish
+python critters.py          # potato bean mush
+python lakedeer.py
+python props.py             # 이름을 주면 그 소품만 (python props.py well crate)
 python pack_atlas.py        # renders/* → ../Data/Sprites/sprites.{png,txt}, sprites_n.png
 python mock_scene.py        # 엔진과 같은 좌표 계산으로 마을 한 장면 합성 (검수)
 ```
@@ -52,5 +58,6 @@ python mock_scene.py        # 엔진과 같은 좌표 계산으로 마을 한 �
 - 스프라이트 배율 2 (타르투 3). 엔진은 `sprites.txt` 의 scale 로 나눠 1배로 그린다
 - 뷰 변환 Standard. 톤 커브·그레이딩은 엔진 Composite.fs 몫
 - 조명은 공용 리그 하나 (`ggcommon.light_rig`). 바닥 그림자는 굽지 않는다
+- 캐릭터·몬스터는 `G.MATTE = 1.0` (반사광 한 단계 낮춤). 음식·환경은 0
 - 노멀맵은 머티리얼의 높이장을 셰이더 안에서 3D 유한차분으로 미분해 탄젠트 공간으로 굽는다 (블렌더의 Bump 노드는 베이크에서 0 이 되기 때문)
 - `sprites_n.png` 는 스프라이트용 카메라 공간 노멀. 엔진은 아직 안 읽는다 — 횃불·낮밤 동적 조명을 붙일 때 쓴다

@@ -356,6 +356,17 @@ def set_faces_material(ob, idx, pred=None):
 
 MAT_SPECS = {}   # 머티리얼 이름 -> 스펙 (최종 머티리얼의 스칼라 속성)
 
+# 무광 정도 0..1. 캐릭터·몬스터 스크립트만 올린다 (음식·환경은 0 = 그대로).
+# 반사광을 줄이되 질감은 남기도록 러프니스는 1 쪽으로 밀고, 스펙큘러·코트·
+# 시인은 비율로 깎는다. 눈의 하이라이트 점(에미션)은 건드리지 않는다.
+MATTE = 0.0
+
+
+def _matte(rough, spec, coat, sheen):
+	k = MATTE
+	return (rough + (1.0 - rough) * 0.35 * k, spec * (1.0 - 0.4 * k),
+		coat * (1.0 - 0.6 * k), sheen * (1.0 - 0.5 * k))
+
 
 def _n(nt, typ, x=0, y=0, name=None):
 	n = nt.nodes.new(typ)
@@ -459,6 +470,8 @@ def proc_mat(name, base, base2=None, var_scale=4.0, var_amt=0.0,
 		normal_strength=1.0, height_scale=0.012, tint_bottom=None, transmission=0.0,
 		alpha=1.0, var_edge=(0.35, 0.65)):
 	"""프로시저럴 소스 머티리얼. 스칼라 속성은 MAT_SPECS 에 남겨 최종 머티리얼이 쓴다."""
+	if metallic < 0.5:
+		rough, spec, coat, sheen = _matte(rough, spec, coat, sheen)
 	m = bpy.data.materials.new(name)
 	nt = m.node_tree
 	for n in list(nt.nodes):
@@ -812,6 +825,8 @@ def _final_mat(m, imgs):
 def simple_mat(name, color, rough=0.4, emission=None, coat=0.0, spec=0.5, metallic=0.0,
 		sss=0.0):
 	"""베이크하지 않는 단색 머티리얼 (눈, 유리, 하이라이트 같은 작은 부품)."""
+	if emission is None and metallic < 0.5:
+		rough, spec, coat, _ = _matte(rough, spec, coat, 0.0)
 	m = bpy.data.materials.new(name)
 	b = m.node_tree.nodes.get('Principled BSDF')
 	b.inputs['Base Color'].default_value = (*color, 1.0)
@@ -1209,3 +1224,24 @@ def dominant_group(ob, v):
 			bw = g.weight
 			best = ob.vertex_groups[g.group].name
 	return best
+
+
+def auto_canvas(objs, scale=SCALE, margin=6):
+	"""오브젝트들의 바운딩 박스를 화면으로 투영해 캔버스 크기와 피벗(월드 원점)을 정한다.
+	sx = (x + y) * 36, sy = (x - y) * 18 - z * 44.09 (1배 px)."""
+	import itertools
+	xs, ys = [], []
+	dg = bpy.context.evaluated_depsgraph_get()
+	for o in objs:
+		ev = o.evaluated_get(dg)
+		for c in ev.bound_box:
+			p = o.matrix_world @ Vector(c)
+			xs.append((p.x + p.y) * 36.0 * scale)
+			ys.append(((p.x - p.y) * 18.0 - p.z * PX_PER_BU * math.cos(math.radians(30))) * scale)
+	x0, x1 = min(xs + [0.0]), max(xs + [0.0])
+	y0, y1 = min(ys + [0.0]), max(ys + [0.0])
+	w = int(math.ceil(x1 - x0)) + 2 * margin
+	h = int(math.ceil(y1 - y0)) + 2 * margin
+	w += w % 2
+	h += h % 2
+	return (w, h), (int(round(-x0)) + margin, int(round(-y0)) + margin)

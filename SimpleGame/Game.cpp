@@ -229,7 +229,17 @@ static SpriteAtlas g_Spr;
 static bool        g_SprOk;
 static int g_AnRinoIdle = -1, g_AnRinoWalk = -1, g_AnRinoGrat = -1;
 static int g_AnTartuIdle = -1, g_AnTartuWalk = -1, g_AnTartuSniff = -1;
-static int g_AnTomIdle = -1, g_AnTomHop = -1, g_AnTomCaught = -1;
+// 잡몹 (종마다 idle / hop / caught). 인덱스는 enum Species
+static int g_AnMobIdle[S_COUNT], g_AnMobHop[S_COUNT], g_AnMobCaught[S_COUNT];
+static int g_AnDeerIdle = -1;
+static float g_BeastX, g_BeastY;   // 그리는 중인 호수사슴의 월드 위치 (DrawBeast 는 스크린 좌표만 받는다)
+
+// 소품 정적 스프라이트 (Art/scripts/props.py)
+static int g_SpPine = -1, g_SpBush = -1, g_SpRock = -1, g_SpWell = -1, g_SpCrate = -1;
+static int g_SpBarrel = -1, g_SpFence = -1, g_SpVine = -1, g_SpVineGrapes = -1, g_SpReed = -1;
+static int g_SpHerb = -1, g_SpTentCanvas = -1, g_SpTentRed = -1, g_SpWagon = -1;
+static int g_SpStall[5] = { -1, -1, -1, -1, -1 };
+static int g_SpCampfire = -1;
 static int g_SpHouse = -1, g_SpTree = -1, g_SpHearth = -1, g_SpCauldron = -1;
 static int g_SpDishIcon = -1, g_SpDishClose = -1;
 
@@ -256,6 +266,7 @@ static const float TARTU_SNIFF_LEN   = 3.0f;
 // 포획 연출: 토마토마가 빙글 돌며 작아지고 빛이 되어 사라진다 (유혈 없음)
 struct CatchFx
 {
+	int   species;
 	float x, y, t;
 	float dirX, dirY;
 };
@@ -302,9 +313,36 @@ static void LoadSprites()
 	g_AnTartuIdle  = g_Spr.FindAnim("tartu.idle");
 	g_AnTartuWalk  = g_Spr.FindAnim("tartu.walk");
 	g_AnTartuSniff = g_Spr.FindAnim("tartu.sniff");
-	g_AnTomIdle    = g_Spr.FindAnim("tomatoma.idle");
-	g_AnTomHop     = g_Spr.FindAnim("tomatoma.hop");
-	g_AnTomCaught  = g_Spr.FindAnim("tomatoma.caught");
+	// 스프라이트 이름은 Art/scripts 의 에셋 이름 (enum Species 순서)
+	static const char* const MOB_ASSET[S_COUNT] = { "tomatoma", "potato", "bean", "mush" };
+	char nm[64];
+	for (int i = 0; i < S_COUNT; ++i)
+	{
+		snprintf(nm, sizeof(nm), "%s.idle", MOB_ASSET[i]);   g_AnMobIdle[i] = g_Spr.FindAnim(nm);
+		snprintf(nm, sizeof(nm), "%s.hop", MOB_ASSET[i]);    g_AnMobHop[i] = g_Spr.FindAnim(nm);
+		snprintf(nm, sizeof(nm), "%s.caught", MOB_ASSET[i]); g_AnMobCaught[i] = g_Spr.FindAnim(nm);
+	}
+	g_AnDeerIdle   = g_Spr.FindAnim("lakedeer.idle");
+	g_SpPine       = g_Spr.FindSprite("pine");
+	g_SpBush       = g_Spr.FindSprite("bush");
+	g_SpRock       = g_Spr.FindSprite("rock");
+	g_SpWell       = g_Spr.FindSprite("well");
+	g_SpCrate      = g_Spr.FindSprite("crate");
+	g_SpBarrel     = g_Spr.FindSprite("barrel");
+	g_SpFence      = g_Spr.FindSprite("fence");
+	g_SpVine       = g_Spr.FindSprite("vine");
+	g_SpVineGrapes = g_Spr.FindSprite("vine_grapes");
+	g_SpReed       = g_Spr.FindSprite("reed");
+	g_SpHerb       = g_Spr.FindSprite("herb");
+	g_SpTentCanvas = g_Spr.FindSprite("tent_canvas");
+	g_SpTentRed    = g_Spr.FindSprite("tent_red");
+	g_SpWagon      = g_Spr.FindSprite("wagon");
+	for (int i = 0; i < 5; ++i)
+	{
+		snprintf(nm, sizeof(nm), "stall_%d", i);
+		g_SpStall[i] = g_Spr.FindSprite(nm);
+	}
+	g_SpCampfire   = g_Spr.FindSprite("campfire");
 	g_SpHouse      = g_Spr.FindSprite("house");
 	g_SpTree       = g_Spr.FindSprite("tree");
 	g_SpHearth     = g_Spr.FindSprite("pot_hearth");
@@ -314,10 +352,19 @@ static void LoadSprites()
 
 	// 리노 애니메이션 셋만 있으면 켠다. 나머지는 하나씩 없어도 그 개체만 SDF 로 그린다
 	g_SprOk = (g_AnRinoIdle >= 0 && g_AnRinoWalk >= 0 && g_AnRinoGrat >= 0);
-	printf("[Sprites] atlas %dx%d, rino %s, tartu %s, tomatoma %s, props %d/6\n", aw, ah,
+	int mobs = 0;
+	for (int i = 0; i < S_COUNT; ++i)
+		mobs += (g_AnMobIdle[i] >= 0 && g_AnMobHop[i] >= 0 && g_AnMobCaught[i] >= 0);
+	int props = (g_SpPine >= 0) + (g_SpBush >= 0) + (g_SpRock >= 0) + (g_SpWell >= 0) +
+		(g_SpCrate >= 0) + (g_SpBarrel >= 0) + (g_SpFence >= 0) + (g_SpVine >= 0) +
+		(g_SpVineGrapes >= 0) + (g_SpReed >= 0) + (g_SpHerb >= 0) + (g_SpTentCanvas >= 0) +
+		(g_SpTentRed >= 0) + (g_SpWagon >= 0) + (g_SpCampfire >= 0);
+	for (int i = 0; i < 5; ++i) props += (g_SpStall[i] >= 0);
+	printf("[Sprites] atlas %dx%d, rino %s, tartu %s, mobs %d/%d, deer %s, props %d/20, "
+		"village %d/6\n", aw, ah,
 		g_SprOk ? "ok" : "MISSING",
 		(g_AnTartuIdle >= 0 && g_AnTartuWalk >= 0 && g_AnTartuSniff >= 0) ? "ok" : "missing",
-		(g_AnTomIdle >= 0 && g_AnTomHop >= 0 && g_AnTomCaught >= 0) ? "ok" : "missing",
+		mobs, (int)S_COUNT, g_AnDeerIdle >= 0 ? "ok" : "missing", props,
 		(g_SpHouse >= 0) + (g_SpTree >= 0) + (g_SpHearth >= 0) + (g_SpCauldron >= 0) +
 		(g_SpDishIcon >= 0) + (g_SpDishClose >= 0));
 }
@@ -327,9 +374,18 @@ static bool TartuReady()
 	return g_SprOk && g_AnTartuIdle >= 0 && g_AnTartuWalk >= 0 && g_AnTartuSniff >= 0;
 }
 
-static bool TomatomaReady()
+static bool MobReady(int species)
 {
-	return g_SprOk && g_AnTomIdle >= 0 && g_AnTomHop >= 0 && g_AnTomCaught >= 0;
+	return g_SprOk && species >= 0 && species < S_COUNT &&
+		g_AnMobIdle[species] >= 0 && g_AnMobHop[species] >= 0 && g_AnMobCaught[species] >= 0;
+}
+
+// 소품 한 장. 아틀라스에 없으면 false (호출부가 예전 SDF 로 그린다)
+static bool DrawProp(int spr, float sx, float sy, bool flip, const Col& tint, float scale = 1.0f)
+{
+	if (!g_SprOk || spr < 0) return false;
+	DrawSpr(g_Spr.Frame(spr), sx, sy, scale, flip, tint);
+	return true;
 }
 
 // -----------------------------------------------------------------------------
@@ -1374,9 +1430,10 @@ static void ReleaseClaim(Agent& a)
 static void CatchMob(int entIdx)
 {
 	Entity& m = g_Ents[entIdx];
-	if (m.data == S_TOMATOMA && TomatomaReady())
+	if (MobReady(m.data))
 	{
 		CatchFx fx;
+		fx.species = m.data;
 		fx.x = m.x;
 		fx.y = m.y;
 		fx.t = 0.0f;
@@ -1960,12 +2017,11 @@ static void UpdateSpriteFx(float dt)
 			g_GratAnimT = -1.0f;
 	}
 
-	if (TomatomaReady())
 	{
-		float len = g_Spr.AnimDuration(g_AnTomCaught) + 0.25f;
 		for (size_t i = 0; i < g_CatchFx.size(); )
 		{
 			g_CatchFx[i].t += dt;
+			float len = g_Spr.AnimDuration(g_AnMobCaught[g_CatchFx[i].species]) + 0.25f;
 			if (g_CatchFx[i].t > len)
 			{
 				g_CatchFx[i] = g_CatchFx.back();
@@ -1976,10 +2032,6 @@ static void UpdateSpriteFx(float dt)
 				++i;
 			}
 		}
-	}
-	else
-	{
-		g_CatchFx.clear();
 	}
 
 	if (TartuReady()) UpdateTartu(dt);
@@ -2503,6 +2555,16 @@ static void DrawPine(const Entity& e, float sx, float sy)
 	Col leaf(0.23f + v * 0.06f, 0.38f + v * 0.07f, 0.26f + v * 0.05f);
 	float sway = sinf(g_Time * 0.6f + e.phase) * 1.6f;
 
+	if (g_SprOk && g_SpPine >= 0)
+	{
+		float k = 0.92f + v * 0.18f;
+		R->DrawShadow(sx + 3.0f, sy + 2.0f, 46.0f * k, 20.0f * k, 0.30f, 0.26f);
+		R->SetSway(sx, sy, e.phase, 0.014f, 0.6f);
+		DrawProp(g_SpPine, sx, sy, v > 0.5f, Col(0.92f + v * 0.12f, 0.95f + v * 0.08f, 0.94f), k);
+		R->ClearSway();
+		return;
+	}
+
 	R->DrawShadow(sx + 3.0f, sy + 2.0f, 44.0f, 20.0f, 0.30f, 0.26f);
 	R->DrawRect(sx, sy - 12.0f, 10.0f, 26.0f,
 		Shade(C_WOOD, 1.10f), Shade(C_WOOD, 0.75f), 0.35f);
@@ -2520,6 +2582,14 @@ static void DrawBush(const Entity& e, float sx, float sy)
 	float v = Hash((int)(e.x * 11.0f), (int)(e.y * 5.0f));
 	Col c(0.34f + v * 0.10f, 0.47f + v * 0.10f, 0.26f + v * 0.06f);
 
+	if (g_SprOk && g_SpBush >= 0)
+	{
+		R->DrawShadow(sx + 2.0f, sy + 1.0f, 34.0f, 15.0f, 0.26f, 0.28f);
+		DrawProp(g_SpBush, sx, sy, v > 0.5f, Col(0.92f + v * 0.14f, 0.95f + v * 0.10f, 0.92f),
+			0.9f + v * 0.25f);
+		return;
+	}
+
 	R->DrawShadow(sx + 2.0f, sy + 1.0f, 30.0f, 14.0f, 0.26f, 0.28f);
 	R->DrawEllipse(sx - 6.0f, sy - 9.0f, 22.0f, 18.0f, Shade(c, 1.02f), Shade(c, 0.78f));
 	R->DrawEllipse(sx + 6.0f, sy - 11.0f, 24.0f, 20.0f,
@@ -2529,6 +2599,7 @@ static void DrawBush(const Entity& e, float sx, float sy)
 static void DrawRock(float sx, float sy)
 {
 	R->DrawShadow(sx + 2.0f, sy + 1.0f, 30.0f, 14.0f, 0.28f, 0.26f);
+	if (DrawProp(g_SpRock, sx, sy, false, Col(1.0f, 1.0f, 1.0f))) return;
 	R->DrawEllipse(sx, sy - 8.0f, 30.0f, 20.0f,
 		Shade(C_STONE, 1.10f), Shade(C_STONE, 0.78f), 0.10f);
 	R->DrawEllipse(sx - 5.0f, sy - 14.0f, 16.0f, 11.0f,
@@ -2604,6 +2675,7 @@ static void DrawHouse(const Entity& e, float sx, float sy)
 static void DrawWell(float sx, float sy)
 {
 	R->DrawShadow(sx + 3.0f, sy + 2.0f, 52.0f, 24.0f, 0.30f, 0.24f);
+	if (DrawProp(g_SpWell, sx, sy, false, Col(1.0f, 1.0f, 1.0f))) return;
 	R->DrawRect(sx, sy - 12.0f, 44.0f, 26.0f,
 		Shade(C_STONE, 1.08f), Shade(C_STONE, 0.74f), 0.14f, 0.08f);
 	R->DrawEllipse(sx, sy - 23.0f, 38.0f, 14.0f,
@@ -2621,6 +2693,7 @@ static void DrawWell(float sx, float sy)
 static void DrawCrate(float sx, float sy)
 {
 	R->DrawShadow(sx + 2.0f, sy + 1.0f, 28.0f, 13.0f, 0.26f, 0.26f);
+	if (DrawProp(g_SpCrate, sx, sy, false, Col(1.0f, 1.0f, 1.0f))) return;
 	R->DrawRect(sx, sy - 12.0f, 26.0f, 24.0f,
 		Shade(C_WOOD, 1.30f), Shade(C_WOOD, 0.92f), 0.10f, 0.08f);
 	R->DrawRect(sx, sy - 12.0f, 26.0f, 3.0f, Fade(Shade(C_WOOD, 0.70f), 0.7f), 0.5f);
@@ -2629,6 +2702,7 @@ static void DrawCrate(float sx, float sy)
 static void DrawBarrel(float sx, float sy)
 {
 	R->DrawShadow(sx + 2.0f, sy + 1.0f, 26.0f, 12.0f, 0.26f, 0.26f);
+	if (DrawProp(g_SpBarrel, sx, sy, false, Col(1.0f, 1.0f, 1.0f))) return;
 	R->DrawRect(sx, sy - 14.0f, 24.0f, 28.0f,
 		Shade(C_WOOD, 1.22f), Shade(C_WOOD, 0.84f), 0.28f, 0.10f);
 	R->DrawRect(sx, sy - 20.0f, 26.0f, 3.0f, Fade(Col(0.42f, 0.40f, 0.38f), 0.8f), 0.5f);
@@ -2639,6 +2713,7 @@ static void DrawBarrel(float sx, float sy)
 static void DrawFence(float sx, float sy)
 {
 	R->DrawShadow(sx, sy, 20.0f, 9.0f, 0.20f, 0.28f);
+	if (DrawProp(g_SpFence, sx, sy, false, Col(1.0f, 1.0f, 1.0f))) return;
 	R->DrawRect(sx, sy - 14.0f, 5.0f, 28.0f,
 		Shade(C_WOOD, 1.25f), Shade(C_WOOD, 0.90f), 0.4f);
 	R->DrawRect(sx, sy - 20.0f, 28.0f, 4.0f, Shade(C_WOOD, 1.10f), 0.5f);
@@ -2649,6 +2724,16 @@ static void DrawVine(const Entity& e, float sx, float sy)
 {
 	float v = Hash((int)(e.x * 3.0f), (int)(e.y * 7.0f));
 	Col leaf(0.40f + v * 0.08f, 0.50f + v * 0.08f, 0.28f);
+
+	if (g_SprOk && g_SpVine >= 0)
+	{
+		// 절반은 포도송이가 달린 그루 (예전 그림과 같은 기준)
+		int spr = (v > 0.5f && g_SpVineGrapes >= 0) ? g_SpVineGrapes : g_SpVine;
+		R->DrawShadow(sx + 2.0f, sy + 1.0f, 28.0f, 12.0f, 0.24f, 0.26f);
+		DrawProp(spr, sx, sy, (((int)(v * 61.0f)) & 1) != 0,
+			Col(0.94f + v * 0.1f, 0.96f + v * 0.06f, 0.94f));
+		return;
+	}
 
 	R->DrawShadow(sx + 2.0f, sy + 1.0f, 26.0f, 12.0f, 0.24f, 0.26f);
 	R->DrawRect(sx, sy - 9.0f, 4.0f, 20.0f, Shade(C_WOOD, 1.0f), 0.5f);
@@ -2663,6 +2748,14 @@ static void DrawReed(const Entity& e, float sx, float sy)
 {
 	float sway = sinf(g_Time * 1.4f + e.phase) * 3.0f;
 	Col c(0.56f, 0.58f, 0.36f);
+
+	if (g_SprOk && g_SpReed >= 0)
+	{
+		R->SetSway(sx, sy, e.phase, 0.06f, 1.4f);
+		DrawProp(g_SpReed, sx, sy, false, Col(1.0f, 1.0f, 1.0f));
+		R->ClearSway();
+		return;
+	}
 	for (int i = -1; i <= 1; ++i)
 	{
 		R->DrawRect(sx + i * 5.0f + sway * (0.5f + i * 0.3f), sy - 16.0f,
@@ -2749,6 +2842,12 @@ static void DrawHerb(float sx, float sy)
 	float p = 0.24f + sinf(g_Time * 2.6f) * 0.10f;
 	R->DrawEllipse(sx, sy - 10.0f, 54.0f, 34.0f,
 		Fade(Col(1.0f, 0.92f, 0.50f), p * 0.45f));
+	if (g_SprOk && g_SpHerb >= 0)
+	{
+		R->DrawShadow(sx + 1.0f, sy, 20.0f, 9.0f, 0.22f, 0.28f);
+		DrawProp(g_SpHerb, sx, sy, false, Col(1.0f, 1.0f, 1.0f));
+		return;
+	}
 
 	R->DrawShadow(sx + 1.0f, sy, 20.0f, 9.0f, 0.22f, 0.28f);
 	R->DrawRect(sx, sy - 9.0f, 3.0f, 18.0f, Col(0.52f, 0.58f, 0.32f), 0.5f);
@@ -2759,8 +2858,8 @@ static void DrawHerb(float sx, float sy)
 }
 
 // 야생 미식종. 둥근 실루엣 + 큰 눈 + 통통 뛰는 모션.
-// 토마토마 한 장. t 는 동작 경과(초)
-static void DrawTomatomaSprite(int anim, float t, float dirX, float dirY, float sx, float sy,
+// 잡몹 한 장. t 는 동작 경과(초)
+static void DrawMobSprite(int anim, float t, float dirX, float dirY, float sx, float sy,
 	float shadowK)
 {
 	bool flip = false;
@@ -2775,11 +2874,12 @@ static void DrawMonster(const Entity& e, float sx, float sy)
 {
 	const SpeciesInfo& si = g_Species[e.data];
 
-	if (e.data == S_TOMATOMA && TomatomaReady())
+	if (MobReady(e.data))
 	{
 		// phase 는 초당 3.4 씩 오른다 -> 초로 되돌려 애니메이션 시간에 쓴다
 		float t = e.phase / 3.4f;
-		DrawTomatomaSprite(e.moving ? g_AnTomHop : g_AnTomIdle, t, e.dirX, e.dirY, sx, sy, 1.0f);
+		DrawMobSprite(e.moving ? g_AnMobHop[e.data] : g_AnMobIdle[e.data], t, e.dirX, e.dirY,
+			sx, sy, 1.0f);
 		return;
 	}
 
@@ -2902,6 +3002,15 @@ static void DrawBeast(float sx, float sy)
 	R->DrawEllipse(sx, sy - 30.0f, 150.0f, 110.0f, Fade(Col(0.86f, 0.76f, 1.0f), glow));
 	R->DrawShadow(sx + 4.0f, sy + 2.0f, 82.0f, 32.0f, 0.34f, 0.24f);
 
+	if (g_SprOk && g_AnDeerIdle >= 0)
+	{
+		// 움직이지 않는 개체 — 플레이어 쪽을 본다 (방향은 월드 좌표로 계산)
+		bool flip = false;
+		int dir = SpriteAtlas::SpriteDirFromWorld(g_PlayerX - g_BeastX, g_PlayerY - g_BeastY, &flip);
+		DrawSpr(g_Spr.AnimFrameAt(g_AnDeerIdle, dir, g_Time), sx, sy, 1.0f, flip, Col(1.0f, 1.0f, 1.0f));
+		return;
+	}
+
 	// 다리
 	for (int i = 0; i < 4; ++i)
 	{
@@ -2984,6 +3093,7 @@ static void DrawTent(const Entity& e, float sx, float sy)
 {
 	Col canvas = (e.data == 1) ? Shade(C_CANVAS, 1.02f) : Col(0.58f, 0.30f, 0.24f);
 	R->DrawShadow(sx + 4.0f, sy + 2.0f, 76.0f, 30.0f, 0.30f, 0.26f);
+	if (DrawProp(e.data == 1 ? g_SpTentCanvas : g_SpTentRed, sx, sy, false, Col(1.0f, 1.0f, 1.0f))) return;
 	R->DrawTriangle(sx, sy - 26.0f, 72.0f, 54.0f,
 		Shade(canvas, 1.10f), Shade(canvas, 0.72f), 0.10f);
 	// 입구 — 안이 어두워야 천막으로 읽힌다
@@ -2996,6 +3106,8 @@ static void DrawWagon(const Entity& e, float sx, float sy)
 {
 	float v = Hash((int)e.x, (int)e.y);
 	R->DrawShadow(sx + 4.0f, sy + 3.0f, 84.0f, 30.0f, 0.32f, 0.24f);
+	if (DrawProp(g_SpWagon, sx, sy, v > 0.5f, Col(0.96f + v * 0.06f, 0.96f + v * 0.04f, 0.96f)))
+		return;
 	// 바퀴 뒤쪽
 	R->DrawEllipse(sx - 26.0f, sy - 12.0f, 22.0f, 22.0f, Shade(C_WOOD, 0.80f), Shade(C_WOOD, 0.60f));
 	// 짐칸
@@ -3025,6 +3137,7 @@ static void DrawStall(const Entity& e, float sx, float sy)
 	int k = e.data % 5;
 
 	R->DrawShadow(sx + 3.0f, sy + 2.0f, 70.0f, 26.0f, 0.30f, 0.26f);
+	if (DrawProp(g_SpStall[k], sx, sy, false, Col(1.0f, 1.0f, 1.0f))) return;
 	R->DrawRect(sx - 28.0f, sy - 30.0f, 4.0f, 56.0f, Shade(C_WOOD, 1.1f), 0.5f);
 	R->DrawRect(sx + 28.0f, sy - 30.0f, 4.0f, 56.0f, Shade(C_WOOD, 1.1f), 0.5f);
 	// 판매대와 물건
@@ -3045,6 +3158,11 @@ static void DrawCampfire(float sx, float sy)
 {
 	float glow = 0.20f + sinf(g_Time * 5.3f) * 0.04f;
 	R->DrawEllipse(sx, sy - 8.0f, 120.0f, 70.0f, Fade(Col(1.0f, 0.70f, 0.36f), glow));
+	if (DrawProp(g_SpCampfire, sx, sy, false, Col(1.0f, 1.0f, 1.0f)))
+	{
+		R->DrawFlame(sx, sy - 18.0f, 28.0f, 38.0f, g_Time, 1.0f, 1.0f);
+		return;
+	}
 	for (int i = 0; i < 6; ++i)
 	{
 		float a = i / 6.0f * 6.2832f;
@@ -3260,7 +3378,7 @@ static void DrawEntity(const Entity& e, float sx, float sy)
 	case E_POT:      DrawPot(sx, sy); break;
 	case E_HERB:     DrawHerb(sx, sy); break;
 	case E_MONSTER:  DrawMonster(e, sx, sy); break;
-	case E_BEAST:    DrawBeast(sx, sy); break;
+	case E_BEAST:    g_BeastX = e.x; g_BeastY = e.y; DrawBeast(sx, sy); break;
 	case E_TENT:     DrawTent(e, sx, sy); break;
 	case E_WAGON:    DrawWagon(e, sx, sy); break;
 	case E_STALL:    DrawStall(e, sx, sy); break;
@@ -3329,7 +3447,8 @@ static void DrawTartuSprite(float sx, float sy)
 
 static void DrawCatchFx(const CatchFx& fx, float sx, float sy)
 {
-	float len = g_Spr.AnimDuration(g_AnTomCaught);
+	int anim = g_AnMobCaught[fx.species];
+	float len = g_Spr.AnimDuration(anim);
 	float u = fx.t / len;
 	if (u > 1.0f) u = 1.0f;
 
@@ -3345,7 +3464,7 @@ static void DrawCatchFx(const CatchFx& fx, float sx, float sy)
 			4.0f, 4.0f, Fade(Col(1.0f, 0.95f, 0.75f), al));
 	}
 	if (fx.t <= len)
-		DrawTomatomaSprite(g_AnTomCaught, fx.t, fx.dirX, fx.dirY, sx, sy, 1.0f - u);
+		DrawMobSprite(anim, fx.t, fx.dirX, fx.dirY, sx, sy, 1.0f - u);
 }
 
 // ---- 깊이 정렬 ----------------------------------------------------------
