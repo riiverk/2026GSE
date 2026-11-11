@@ -14,6 +14,7 @@
 #include "SceneGraph.h"
 #include "Profiler.h"
 #include "JsonWriter.h"
+#include "SpriteAtlas.h"
 
 // =============================================================================
 // 레벨 1 — 사냥터
@@ -295,6 +296,7 @@ public:
 	float wait;
 	float phase;
 	float faceX;
+	float dirX, dirY;  // 스프라이트 방향 (월드, 단위 벡터). faceX 는 SDF 좌우 반전용
 	bool  moving;
 	int   hp;
 	float hurtFlash;
@@ -366,7 +368,7 @@ public:
 	int   vit;   // 최대 체력
 	int   agi;   // 공격 속도 / 이동 속도
 
-	float attackTimer;    // 남은 모션 시간
+	float attackTimer;    // 공격 모션 경과 시간 (음수 = 공격 중 아님)
 	float attackCooldown;
 	bool  attackHitDone;
 
@@ -411,6 +413,23 @@ protected:
 	virtual void OnRender(const RenderContext& rc, float sx, float sy);
 };
 
+// 쓰러진 미식종이 빙글 돌며 작아지고 빛이 되어 사라지는 연출 (유혈 없음).
+// 몬스터 Actor 는 쓰러지는 즉시 지우고 이 Actor 를 그 자리에 둔다. 스프라이트가
+// 없으면 만들지 않는다
+class CatchFxActor : public Actor
+{
+public:
+	CatchFxActor(int species, float x, float y, float dirX, float dirY);
+
+	int   species;
+	float t;
+	float dirX, dirY;
+
+protected:
+	virtual void OnUpdate(float dt);
+	virtual void OnRender(const RenderContext& rc, float sx, float sy);
+};
+
 // -----------------------------------------------------------------------------
 // 씬 그래프
 //
@@ -447,7 +466,95 @@ static Actor*       g_PropGroup = 0;
 static Actor*       g_PropCell[CELLS_Y][CELLS_X];
 static Actor*       g_MonGroup  = 0;
 static Actor*       g_DropGroup = 0;
+static Actor*       g_FxGroup   = 0;
 static Actor*       g_TextGroup = 0;
+
+// ---- 블렌더 스프라이트 (Art/scripts). 아틀라스는 Game::Init 이 읽어 올린다 ----
+// 하나라도 없으면 그 개체만 예전 SDF 모델로 그린다
+struct LevelSprites
+{
+	bool ok;
+	int  playerIdle, playerWalk, playerAttack;   // rino_ladle.* — 국자를 쥔 리노
+	int  monIdle[SP_COUNT], monMove[SP_COUNT], monCaught[SP_COUNT];
+	int  boarWindup, boarCharge;
+	int  item[IK_COUNT];
+	int  tree, pine, bush, rock, campfire;
+};
+static LevelSprites g_LSpr;
+
+// 배율: 리노·토마토마는 튜토리얼과 같게. 멧돼지는 예전 SDF 모델 크기에 맞춘다
+static const float PLAYER_SPRITE_SCALE   = 0.9f;
+static const float TOMATOMA_SPRITE_SCALE = 1.3f;
+static const float BOAR_SPRITE_SCALE     = 1.25f;
+static const float ITEM_SPRITE_SCALE     = 1.2f;
+
+static void LoadLevelSprites()
+{
+	PROFILE_SCOPE("level1.sprite_load");
+	LevelSprites& L = g_LSpr;
+	L.ok = SharedSpritesReady();
+	const SpriteAtlas& sa = SharedSprites();
+	L.playerIdle   = sa.FindAnim("rino_ladle.idle");
+	L.playerWalk   = sa.FindAnim("rino_ladle.walk");
+	L.playerAttack = sa.FindAnim("rino_ladle.attack");
+	static const char* const MOB[SP_COUNT]  = { "tomatoma", "boar" };
+	static const char* const MOVE[SP_COUNT] = { "hop", "run" };
+	char nm[64];
+	for (int i = 0; i < SP_COUNT; ++i)
+	{
+		snprintf(nm, sizeof(nm), "%s.idle", MOB[i]);    L.monIdle[i] = sa.FindAnim(nm);
+		snprintf(nm, sizeof(nm), "%s.%s", MOB[i], MOVE[i]); L.monMove[i] = sa.FindAnim(nm);
+		snprintf(nm, sizeof(nm), "%s.caught", MOB[i]);  L.monCaught[i] = sa.FindAnim(nm);
+	}
+	L.boarWindup = sa.FindAnim("boar.windup");
+	L.boarCharge = sa.FindAnim("boar.charge");
+	static const char* const ITEM[IK_COUNT] = { "item_berry", "item_meat", "item_core" };
+	for (int i = 0; i < IK_COUNT; ++i) L.item[i] = sa.FindSprite(ITEM[i]);
+	L.tree     = sa.FindSprite("tree");
+	L.pine     = sa.FindSprite("pine");
+	L.bush     = sa.FindSprite("bush");
+	L.rock     = sa.FindSprite("rock");
+	L.campfire = sa.FindSprite("campfire");
+	printf("[Level1] sprites %s: player %s, boar %s, items %d/%d\n", L.ok ? "on" : "off",
+		(L.playerIdle >= 0 && L.playerWalk >= 0 && L.playerAttack >= 0) ? "ok" : "missing",
+		(L.monIdle[SP_BOAR] >= 0 && L.boarWindup >= 0 && L.boarCharge >= 0) ? "ok" : "missing",
+		(L.item[0] >= 0) + (L.item[1] >= 0) + (L.item[2] >= 0), (int)IK_COUNT);
+}
+
+static bool PlayerSpriteReady()
+{
+	return g_LSpr.ok && g_LSpr.playerIdle >= 0 && g_LSpr.playerWalk >= 0 &&
+		g_LSpr.playerAttack >= 0;
+}
+
+static bool MonSpriteReady(int species)
+{
+	if (!g_LSpr.ok) return false;
+	if (g_LSpr.monIdle[species] < 0 || g_LSpr.monMove[species] < 0) return false;
+	if (species == SP_BOAR) return g_LSpr.boarWindup >= 0 && g_LSpr.boarCharge >= 0;
+	return true;
+}
+
+static float MonSpriteScale(int species)
+{
+	return (species == SP_BOAR ? BOAR_SPRITE_SCALE : TOMATOMA_SPRITE_SCALE) *
+		g_Species[species].scale;
+}
+
+// 프롭 스프라이트 (없으면 -1)
+static int PropSprite(int type)
+{
+	if (!g_LSpr.ok) return -1;
+	switch (type)
+	{
+	case PROP_TREE: return g_LSpr.tree;
+	case PROP_PINE: return g_LSpr.pine;
+	case PROP_BUSH: return g_LSpr.bush;
+	case PROP_ROCK: return g_LSpr.rock;
+	case PROP_FIRE: return g_LSpr.campfire;
+	default:        return -1;
+	}
+}
 
 static int   XpToNext(int level)           { return 25 + (level - 1) * 18; }
 static int   MaxHp(const PlayerActor& p)   { return 40 + p.vit * 12; }
@@ -823,6 +930,7 @@ void Reset(unsigned int seed)
 	g_Scene.GetRoot()->AddChild(g_Player);
 	g_MonGroup  = g_Scene.CreateGroup();
 	g_DropGroup = g_Scene.CreateGroup();
+	g_FxGroup   = g_Scene.CreateGroup();
 	g_TextGroup = g_Scene.CreateGroup();
 
 	for (int y = 0; y < MAP_H; ++y)
@@ -889,6 +997,7 @@ void Init(Renderer* renderer, int screenW, int screenH)
 	SCR_H = screenH;
 	Models::Load();
 	g_Scene.SetProjection(TILE_W, TILE_H, 1.0f);
+	LoadLevelSprites();     // Game::Init 이 아틀라스를 먼저 올린다 (SimpleGame.cpp)
 	Reset(0);
 }
 
@@ -912,7 +1021,7 @@ MonsterActor::MonsterActor(int species_, float x, float y)
 	: species(species_),
 	homeX(x), homeY(y), tgtX(x), tgtY(y),
 	wait(RandF() * 2.0f), phase(RandF() * 6.28f),
-	faceX(1.0f), moving(false),
+	faceX(1.0f), dirX(0.7071f), dirY(0.7071f), moving(false),
 	hp(g_Species[species_].maxHp),
 	hurtFlash(0.0f), knockX(0.0f), knockY(0.0f),
 	state(MS_WANDER), stateT(0.0f), chargeX(0.0f), chargeY(0.0f),
@@ -931,6 +1040,15 @@ DropActor::DropActor(int kind_, float x, float y)
 	SetProfile(prof);
 	SetPosition(x, y);
 	SetBounds(20.0f, 20.0f, 48.0f, 8.0f);
+}
+
+CatchFxActor::CatchFxActor(int species_, float x, float y, float dirX_, float dirY_)
+	: species(species_), t(0.0f), dirX(dirX_), dirY(dirY_)
+{
+	static const ActorProfile prof = SceneGraph::RegisterActorProfile("catch_fx");
+	SetProfile(prof);
+	SetPosition(x, y);
+	SetBounds(70.0f, 70.0f, 110.0f, 30.0f);
 }
 
 PlayerActor::PlayerActor()
@@ -1049,6 +1167,8 @@ static void DoAttackHit()
 		if (m.hp <= 0)
 		{
 			m.Destroy();
+			if (MonSpriteReady(m.species) && g_LSpr.monCaught[m.species] >= 0)
+				g_FxGroup->AddChild(new CatchFxActor(m.species, m.GetX(), m.GetY(), m.dirX, m.dirY));
 			g_Kills++;
 			GainXp(g_Species[m.species].xp);
 			DropLoot(m);
@@ -1487,6 +1607,24 @@ void MonsterActor::OnUpdate(float dt)
 	// 떨림에도 좌우가 뒤집혀 깜빡이는 것처럼 보인다.
 	if (mvx > 0.35f)       faceX =  1.0f;
 	else if (mvx < -0.35f) faceX = -1.0f;
+
+	// 스프라이트는 화면 8방향이라 y 성분도 쓴다. 같은 이유로 느린 움직임은 거른다.
+	// 돌진 중에는 고정한 돌진 방향을 본다 (넉백에 밀려도 고개를 돌리지 않는다)
+	if (state == MS_CHARGE)
+	{
+		dirX = chargeX;
+		dirY = chargeY;
+	}
+	else
+	{
+		float mv2 = mvx * mvx + mvy * mvy;
+		if (mv2 > 0.35f * 0.35f)
+		{
+			float ml = sqrtf(mv2);
+			dirX = mvx / ml;
+			dirY = mvy / ml;
+		}
+	}
 }
 
 // ---- 드롭 / 글자 --------------------------------------------------------
@@ -1524,6 +1662,13 @@ void DropActor::OnUpdate(float dt)
 			AddText(GetX(), GetY(), g_Items[kind].name, Col(0.86f, 0.92f, 0.80f));
 		}
 	}
+}
+
+void CatchFxActor::OnUpdate(float dt)
+{
+	t += dt;
+	// 마지막 프레임 뒤에 빛만 잠깐 남긴다
+	if (t > SharedSprites().AnimDuration(g_LSpr.monCaught[species]) + 0.25f) Destroy();
 }
 
 void FloatTextActor::OnUpdate(float dt)
@@ -1767,6 +1912,24 @@ void PropActor::DrawShapes(float sx, float sy)
 	int shadowFlags = tall ? ANCHOR_SEETHRU : 0;
 	int bodyFlags = ANCHOR_HAZE | (tall ? ANCHOR_SEETHRU : 0);
 
+	int spr = PropSprite(type);
+	if (spr >= 0 && type != PROP_FIRE)
+	{
+		// 한 장을 크기·색·좌우만 바꿔 숲 전체에 쓴다. 바람은 발을 축으로 GPU 가 돌린다
+		const SpriteFrame& f = SharedSprites().Frame(spr);
+		bool flip = (phase > 3.1416f);
+		Col c(0.90f + v * 0.16f, 0.93f + v * 0.10f, 0.90f + v * 0.06f);
+		float sw = tall ? 74.0f : (type == PROP_BUSH ? 30.0f : 34.0f);
+		R->SetAnchor(sx, sy, depth, shadowFlags);
+		R->DrawShadow(sx + 4.0f * k, sy + 2.0f * k, sw * k, sw * 0.42f * k, 0.30f, 0.26f);
+		R->SetAnchor(sx, sy, depth, bodyFlags);
+		if (tall) R->SetSway(sx, sy, phase, 0.016f, 0.55f);
+		DrawSpriteFrame(R, f, sx, sy, k, flip, c);
+		if (tall) R->ClearSway();
+		R->ClearAnchor();
+		return;
+	}
+
 	if (type == PROP_TREE || type == PROP_PINE || type == PROP_BUSH)
 	{
 		// 활엽수는 노랑을 뺀 중간 녹색, 침엽수는 더 어둡고 푸른 녹색.
@@ -1822,6 +1985,15 @@ void PropActor::Record(const RenderContext& rc)
 
 void PropActor::OnRender(const RenderContext& rc, float sx, float sy)
 {
+	if (type == PROP_FIRE && PropSprite(PROP_FIRE) >= 0)
+	{
+		R->DrawEllipse(sx, sy - 8.0f, 120.0f, 70.0f,
+			Fade(Col(1.0f, 0.70f, 0.36f), 0.20f + sinf(rc.time * 5.3f + phase) * 0.04f));
+		DrawSpriteFrame(R, SharedSprites().Frame(PropSprite(PROP_FIRE)), sx, sy, 1.0f, false,
+			Col(1.0f, 1.0f, 1.0f));
+		R->DrawFlame(sx, sy - 18.0f, 28.0f, 38.0f, rc.time + phase, 1.0f, 1.0f);
+		return;
+	}
 	if (type == PROP_FIRE)
 	{
 		// 모닥불은 불빛 세기가 매 프레임 CPU 에서 변하므로 기록하지 않는다.
@@ -1846,9 +2018,64 @@ void PropActor::OnRender(const RenderContext& rc, float sx, float sy)
 	R->SubmitCached(m_Cache, rc.offX, rc.offY);
 }
 
+// 몬스터 스프라이트. 상태마다 동작을 고르고, 맞은 순간은 밝게 번쩍인다
+static void DrawMonsterSprite(const MonsterActor& m, float sx, float sy)
+{
+	const SpriteAtlas& sa = SharedSprites();
+	const LevelSprites& L = g_LSpr;
+	bool flip = false;
+	int dir = SpriteAtlas::SpriteDirFromWorld(m.dirX, m.dirY, &flip);
+
+	int anim = L.monIdle[m.species];
+	float t = m.phase / 2.2f;                 // 서 있을 때 위상은 초당 2.2
+	if (m.species == SP_BOAR && m.state == MS_WINDUP)
+	{
+		anim = L.boarWindup;
+		t = m.stateT;
+	}
+	else if (m.species == SP_BOAR && m.state == MS_CHARGE)
+	{
+		anim = L.boarCharge;
+		t = m.stateT;
+	}
+	else if (m.moving)
+	{
+		anim = L.monMove[m.species];
+		t = m.phase / 7.0f;                   // 움직일 때 위상은 초당 7
+	}
+
+	float k = MonSpriteScale(m.species);
+	R->DrawShadow(sx + 2.0f, sy + 1.0f, (m.species == SP_BOAR ? 46.0f : 30.0f) * k / 1.25f,
+		16.0f, 0.30f, 0.24f);
+	Col tint(1.0f, 1.0f, 1.0f);
+	if (m.hurtFlash > 0.0f)
+	{
+		// 셰이더가 틴트를 곱하므로 1 을 넘기면 밝아진다
+		float f = m.hurtFlash / 0.22f;
+		tint = Col(1.0f + 0.9f * f, 1.0f + 0.8f * f, 1.0f + 0.7f * f);
+	}
+	R->SetAnchor(sx, sy, m.GetDepth(), ANCHOR_HAZE);
+	DrawSpriteFrame(R, sa.AnimFrameAt(anim, dir, t), sx, sy, k, flip, tint);
+	R->ClearAnchor();
+}
+
 void MonsterActor::OnRender(const RenderContext&, float sx, float sy)
 {
 	const SpeciesInfo& si = g_Species[species];
+	if (MonSpriteReady(species))
+	{
+		DrawMonsterSprite(*this, sx, sy);
+		if (hp < si.maxHp)
+		{
+			float w = 38.0f;
+			float ratio = (float)hp / (float)si.maxHp;
+			float gy = sy - (species == SP_BOAR ? 72.0f : 62.0f);
+			R->DrawRect(sx, gy, w + 2.0f, 6.0f, Fade(Col(0.08f, 0.06f, 0.06f), 0.75f), 0.5f);
+			R->DrawRect(sx - w * 0.5f + w * ratio * 0.5f, gy, w * ratio, 4.0f,
+				Col(0.85f, 0.35f, 0.30f), Col(0.62f, 0.22f, 0.20f), 0.5f);
+		}
+		return;
+	}
 
 	Palette pal;
 	pal.c[CS_CLOTH]  = si.body;
@@ -2128,6 +2355,44 @@ Palette PlayerActor::MakePalette() const
 
 void PlayerActor::OnRender(const RenderContext&, float sx, float sy)
 {
+	if (PlayerSpriteReady())
+	{
+		// 국자를 쥔 리노. 내려치기는 공격 모션 비율을 그대로 프레임으로 쓴다
+		// (Art/scripts/rino.py 의 attack 이 LADLE_T_* 구간과 맞춰져 있다)
+		const SpriteAtlas& sa = SharedSprites();
+		bool flip = false;
+		int dir = SpriteAtlas::SpriteDirFromWorld(faceX, faceY, &flip);
+		const SpriteFrame* f;
+		if (attackTimer >= 0.0f)
+		{
+			const SpriteAnim& a = sa.Anim(g_LSpr.playerAttack);
+			int k = (int)(attackTimer / ATTACK_MOTION * a.frames);
+			if (k >= a.frames) k = a.frames - 1;
+			f = &sa.AnimFrameIndex(g_LSpr.playerAttack, dir, k);
+		}
+		else if (walking)
+		{
+			const SpriteAnim& a = sa.Anim(g_LSpr.playerWalk);
+			float c = walkPhase / 6.2832f;
+			int k = (int)floorf((c - floorf(c)) * a.frames);
+			f = &sa.AnimFrameIndex(g_LSpr.playerWalk, dir, k);
+		}
+		else
+		{
+			// 서 있을 때 위상은 초당 1.6
+			f = &sa.AnimFrameAt(g_LSpr.playerIdle, dir, walkPhase / 1.6f);
+		}
+		Col tint(1.0f, 1.0f, 1.0f);
+		if (hurtFlash > 0.0f)
+		{
+			float k = hurtFlash / 0.35f;
+			tint = Col(1.0f + 0.5f * k, 1.0f - 0.35f * k, 1.0f - 0.40f * k);
+		}
+		R->DrawShadow(sx, sy, 32.0f, 14.0f, 0.34f, 0.22f);
+		DrawSpriteFrame(R, *f, sx, sy, PLAYER_SPRITE_SCALE, flip, tint);
+		return;
+	}
+
 	Palette pal = MakePalette();
 
 	PlayerPose pose;
@@ -2211,6 +2476,27 @@ static void LadleGeometry(float hx, float hy, float dir, float pitch,
 void WeaponActor::OnRender(const RenderContext&, float sx, float sy)
 {
 	const PlayerActor& p = *static_cast<const PlayerActor*>(GetParent());
+	if (PlayerSpriteReady())
+	{
+		// 국자는 리노 스프라이트에 들어 있다. 내려치는 구간의 잔상만 남긴다 —
+		// 국자 머리가 지나간 세로 부채꼴이 보여야 판정 범위를 읽을 수 있다
+		float t = p.attackTimer / ATTACK_MOTION;
+		if (p.attackTimer < 0.0f || t < LADLE_T_RAISE || t > LADLE_T_HOLD) return;
+		float fx = p.faceX, fy = p.faceY;
+		float hx = (fx - fy) * 0.70710678f, hy = (fx + fy) * 0.35355339f;
+		float u = (t - LADLE_T_RAISE) / (LADLE_T_HOLD - LADLE_T_RAISE);
+		for (int i = 0; i < 4; ++i)
+		{
+			float a = 1.95f - (1.95f + 0.35f) * (u - i * 0.08f);
+			if (a > 1.95f || a < -0.35f) continue;
+			float c = cosf(a), sn = sinf(a);
+			float rx = sx + hx * c * 58.0f;
+			float ry = sy - 34.0f + hy * c * 58.0f - sn * 58.0f;
+			R->DrawEllipse(rx, ry, LADLE_R * 2.2f, LADLE_R * 1.1f,
+				Fade(Col(1.0f, 0.97f, 0.88f), 0.30f - i * 0.07f));
+		}
+		return;
+	}
 	PlayerPose pose;
 	p.GetPose(&pose);
 
@@ -2275,11 +2561,45 @@ void DropActor::OnRender(const RenderContext&, float sx, float sy)
 {
 	float up = sinf(bob) * 3.0f;
 	const Col& c = g_Items[kind].color;
+	if (g_LSpr.ok && g_LSpr.item[kind] >= 0)
+	{
+		R->DrawShadow(sx, sy, 18.0f, 9.0f, 0.26f, 0.24f);
+		R->DrawEllipse(sx, sy - 18.0f - up, 34.0f, 24.0f, Fade(c, kind == IK_CORE ? 0.30f : 0.16f));
+		DrawSpriteFrame(R, SharedSprites().Frame(g_LSpr.item[kind]), sx, sy - 6.0f - up,
+			ITEM_SPRITE_SCALE, false, Col(1.0f, 1.0f, 1.0f));
+		return;
+	}
 
 	R->DrawShadow(sx, sy, 18.0f, 9.0f, 0.26f, 0.24f);
 	R->DrawEllipse(sx, sy - 30.0f - up, 34.0f, 24.0f, Fade(c, 0.22f));
 	R->DrawEllipse(sx, sy - 12.0f - up, 14.0f, 14.0f, Shade(c, 1.20f), Shade(c, 0.78f), 0.28f);
 	R->DrawEllipse(sx - 3.0f, sy - 15.0f - up, 5.0f, 4.0f, Fade(Col(1, 1, 1), 0.55f));
+}
+
+void CatchFxActor::OnRender(const RenderContext&, float sx, float sy)
+{
+	const SpriteAtlas& sa = SharedSprites();
+	int anim = g_LSpr.monCaught[species];
+	float len = sa.AnimDuration(anim);
+	float u = t / len;
+	if (u > 1.0f) u = 1.0f;
+
+	// 금빛 후광 + 위로 흩어지는 빛 알갱이 (튜토리얼과 같은 연출)
+	R->DrawEllipse(sx, sy - 18.0f - u * 8.0f, 30.0f + u * 30.0f, 26.0f + u * 26.0f,
+		Fade(Col(1.0f, 0.88f, 0.55f), 0.30f * (1.0f - fabsf(u * 2.0f - 1.0f)) + 0.05f));
+	for (int i = 0; i < 6; ++i)
+	{
+		float a = i * 1.047f + t * 2.0f;
+		float r = 8.0f + u * 18.0f;
+		float al = (u > 0.3f) ? (1.0f - u) * 0.9f : u * 3.0f * 0.9f;
+		R->DrawEllipse(sx + cosf(a) * r, sy - 20.0f - u * 34.0f - (i % 3) * 5.0f + sinf(a) * r * 0.4f,
+			4.0f, 4.0f, Fade(Col(1.0f, 0.95f, 0.75f), al));
+	}
+	if (t > len) return;
+	bool flip = false;
+	int dir = SpriteAtlas::SpriteDirFromWorld(dirX, dirY, &flip);
+	DrawSpriteFrame(R, sa.AnimFrameAt(anim, dir, t), sx, sy, MonSpriteScale(species), flip,
+		Col(1.0f, 1.0f, 1.0f, 1.0f - u * 0.6f));
 }
 
 void FloatTextActor::OnRender(const RenderContext&, float sx, float sy)

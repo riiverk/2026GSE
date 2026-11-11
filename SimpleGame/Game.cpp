@@ -225,13 +225,16 @@ static float g_CamOffX, g_CamOffY;
 // 스프라이트 (블렌더 에셋, Art/ 원본 → Data/Sprites 아틀라스)
 // -----------------------------------------------------------------------------
 
-static SpriteAtlas g_Spr;
+static SpriteAtlas& g_Spr = SharedSprites();   // Level1 과 같은 아틀라스
 static bool        g_SprOk;
 static int g_AnRinoIdle = -1, g_AnRinoWalk = -1, g_AnRinoGrat = -1;
 static int g_AnTartuIdle = -1, g_AnTartuWalk = -1, g_AnTartuSniff = -1;
 // 잡몹 (종마다 idle / hop / caught). 인덱스는 enum Species
 static int g_AnMobIdle[S_COUNT], g_AnMobHop[S_COUNT], g_AnMobCaught[S_COUNT];
 static int g_AnDeerIdle = -1;
+// 주민: 몸 / 옷(NPC 옷 색을 곱한다) / 모자(look 별, 머리 앵커를 따라간다)
+static int g_AnVilIdle = -1, g_AnVilWalk = -1, g_AnVilClothIdle = -1, g_AnVilClothWalk = -1;
+static int g_AnVilHat[16];
 static float g_BeastX, g_BeastY;   // 그리는 중인 호수사슴의 월드 위치 (DrawBeast 는 스크린 좌표만 받는다)
 
 // 소품 정적 스프라이트 (Art/scripts/props.py)
@@ -242,6 +245,13 @@ static int g_SpStall[5] = { -1, -1, -1, -1, -1 };
 static int g_SpCampfire = -1;
 static int g_SpHouse = -1, g_SpTree = -1, g_SpHearth = -1, g_SpCauldron = -1;
 static int g_SpDishIcon = -1, g_SpDishClose = -1;
+// 광장 건물 (Art/scripts/landmarks.py). 집과 같은 피벗이라 집 자리에 바꿔 그린다.
+// 깃발 8장·풍차 날개 16장은 같은 피벗으로 그 위에 겹친다
+static const int GUILD_FLAG_FRAMES = 8;
+static const int MILL_BLADE_FRAMES = 16;    // 날개 넷이라 90도가 한 주기
+static int g_SpTavern = -1, g_SpInn = -1, g_SpGuild = -1, g_SpMill = -1, g_SpManor = -1;
+static int g_SpGuildFlag[GUILD_FLAG_FRAMES];
+static int g_SpMillBlade[MILL_BLADE_FRAMES];
 
 // 감사 의례 애니메이션 경과 시간. 음수면 재생하지 않는다
 static float g_GratAnimT = -1.0f;
@@ -276,18 +286,10 @@ static std::vector<CatchFx> g_CatchFx;
 static void DrawSpr(const SpriteFrame& f, float sx, float sy, float scale, bool flip,
 	const Col& tint)
 {
-	float w = f.w * scale;
-	float h = f.h * scale;
-	float left = flip ? sx - (f.ox + f.w) * scale : sx + f.ox * scale;
-	float top  = sy + f.oy * scale;
-	float uv[4] = { f.u0, f.v0, f.u1, f.v1 };
-	if (flip)
-	{
-		uv[0] = f.u1;
-		uv[2] = f.u0;
-	}
-	R->DrawSprite(left + w * 0.5f, top + h * 0.5f, w, h, uv, tint);
+	DrawSpriteFrame(R, f, sx, sy, scale, flip, tint);
 }
+
+static void LoadVillagerSprites();   // Look 표가 아래에 있어서
 
 static void LoadSprites()
 {
@@ -350,9 +352,26 @@ static void LoadSprites()
 	g_SpCauldron   = g_Spr.FindSprite("pot_cauldron");
 	g_SpDishIcon   = g_Spr.FindSprite("dish_icon");
 	g_SpDishClose  = g_Spr.FindSprite("dish_closeup");
+	g_SpTavern     = g_Spr.FindSprite("house_tavern");
+	g_SpInn        = g_Spr.FindSprite("house_inn");
+	g_SpGuild      = g_Spr.FindSprite("house_guild");
+	g_SpMill       = g_Spr.FindSprite("mill");
+	g_SpManor      = g_Spr.FindSprite("house_manor");
+	for (int i = 0; i < GUILD_FLAG_FRAMES; ++i)
+	{
+		snprintf(nm, sizeof(nm), "guild_flag_%d", i);
+		g_SpGuildFlag[i] = g_Spr.FindSprite(nm);
+	}
+	for (int i = 0; i < MILL_BLADE_FRAMES; ++i)
+	{
+		snprintf(nm, sizeof(nm), "mill_blades_%d", i);
+		g_SpMillBlade[i] = g_Spr.FindSprite(nm);
+	}
+	LoadVillagerSprites();
 
 	// 리노 애니메이션 셋만 있으면 켠다. 나머지는 하나씩 없어도 그 개체만 SDF 로 그린다
 	g_SprOk = (g_AnRinoIdle >= 0 && g_AnRinoWalk >= 0 && g_AnRinoGrat >= 0);
+	SetSharedSpritesReady(g_SprOk);
 	int mobs = 0;
 	for (int i = 0; i < S_COUNT; ++i)
 		mobs += (g_AnMobIdle[i] >= 0 && g_AnMobHop[i] >= 0 && g_AnMobCaught[i] >= 0);
@@ -362,12 +381,14 @@ static void LoadSprites()
 		(g_SpTentRed >= 0) + (g_SpWagon >= 0) + (g_SpCampfire >= 0);
 	for (int i = 0; i < 5; ++i) props += (g_SpStall[i] >= 0);
 	printf("[Sprites] atlas %dx%d, rino %s, tartu %s, mobs %d/%d, deer %s, props %d/20, "
-		"village %d/6\n", aw, ah,
+		"village %d/6, landmarks %d/5, villager %s\n", aw, ah,
 		g_SprOk ? "ok" : "MISSING",
 		(g_AnTartuIdle >= 0 && g_AnTartuWalk >= 0 && g_AnTartuSniff >= 0) ? "ok" : "missing",
 		mobs, (int)S_COUNT, g_AnDeerIdle >= 0 ? "ok" : "missing", props,
 		(g_SpHouse >= 0) + (g_SpTree >= 0) + (g_SpHearth >= 0) + (g_SpCauldron >= 0) +
-		(g_SpDishIcon >= 0) + (g_SpDishClose >= 0));
+		(g_SpDishIcon >= 0) + (g_SpDishClose >= 0),
+		(g_SpTavern >= 0) + (g_SpInn >= 0) + (g_SpGuild >= 0) + (g_SpMill >= 0) + (g_SpManor >= 0),
+		(g_AnVilIdle >= 0 && g_AnVilWalk >= 0) ? "ok" : "missing");
 }
 
 static bool TartuReady()
@@ -2613,10 +2634,30 @@ static void DrawHouse(const Entity& e, float sx, float sy)
 {
 	float v = Hash((int)e.x, (int)e.y);
 
+	if (g_SprOk && e.data >= HK_TAVERN)
+	{
+		int sp = -1;
+		switch (e.data)
+		{
+		case HK_TAVERN: sp = g_SpTavern; break;
+		case HK_INN:    sp = g_SpInn; break;
+		case HK_GUILD:  sp = g_SpGuild; break;
+		case HK_MILL:   sp = g_SpMill; break;
+		case HK_MANOR:  sp = g_SpManor; break;
+		default: break;
+		}
+		if (sp >= 0)
+		{
+			R->DrawShadow(sx + 6.0f, sy + 6.0f, e.data == HK_MILL ? 110.0f : 128.0f, 50.0f,
+				0.34f, 0.24f);
+			DrawSpr(g_Spr.Frame(sp), sx, sy, 1.0f, false, Col(1.0f, 1.0f, 1.0f));
+			return;
+		}
+	}
 	if (g_SprOk && g_SpHouse >= 0)
 	{
 		// 주택은 좌우 반전과 명도로 변화를 준다. 영주 저택은 보랏빛으로 눌러
-		// 마을 집들과 한눈에 달라 보이게 한다 (예전 검은 지붕 덧칠의 대신)
+		// 마을 집들과 한눈에 달라 보이게 한다 (저택 그림이 없을 때만)
 		Col tint = Shade(Col(1.0f, 1.0f, 1.0f), 0.94f + v * 0.08f);
 		if (e.data == HK_MANOR) tint = Col(0.78f, 0.72f, 0.84f);
 		bool flip = (e.data < HK_TAVERN) && (((int)(v * 97.0f)) & 1);
@@ -3177,8 +3218,40 @@ static void DrawCampfire(float sx, float sy)
 }
 
 // 특수 건물의 간판·장식. 몸체는 DrawHouse 가 그린다
+// 광장 건물 그림이 있으면 간판·휘장은 그림에 들어 있다. 움직이는 것만 겹친다
+static bool DrawLandmarkOverlay(const Entity& e, float sx, float sy)
+{
+	if (!g_SprOk) return false;
+	const Col white(1.0f, 1.0f, 1.0f);
+	switch (e.data)
+	{
+	case HK_TAVERN: return g_SpTavern >= 0;
+	case HK_INN:    return g_SpInn >= 0;
+	case HK_MANOR:  return g_SpManor >= 0;
+	case HK_GUILD:
+	{
+		if (g_SpGuild < 0) return false;
+		int k = (int)(g_Time * 8.0f) % GUILD_FLAG_FRAMES;
+		if (g_SpGuildFlag[k] >= 0) DrawSpr(g_Spr.Frame(g_SpGuildFlag[k]), sx, sy, 1.0f, false, white);
+		return true;
+	}
+	case HK_MILL:
+	{
+		if (g_SpMill < 0) return false;
+		// 예전 SDF 날개와 같은 속도 (0.6 rad/s). 16장이 90도
+		float turns = g_Time * 0.6f / (PI * 0.5f);
+		int k = (int)((turns - floorf(turns)) * MILL_BLADE_FRAMES) % MILL_BLADE_FRAMES;
+		if (g_SpMillBlade[k] >= 0) DrawSpr(g_Spr.Frame(g_SpMillBlade[k]), sx, sy, 1.0f, false, white);
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
 static void DrawBuildingExtra(const Entity& e, float sx, float sy)
 {
+	if (DrawLandmarkOverlay(e, sx, sy)) return;
 	switch (e.data)
 	{
 	case HK_TAVERN:
@@ -3331,15 +3404,104 @@ static void DrawLook(int look, float sx, float hy, float flip, const Col& cloth,
 	}
 }
 
+// ---- 주민 스프라이트 (Art/scripts/villager.py) ----
+
+// 리노와 같은 배율이라야 어른과 아이 키 차이가 블렌더 원본 그대로 남는다
+static const float VILLAGER_SPRITE_SCALE = 0.9f;
+// 옷 레이어는 거의 흰 천으로 구웠다. 명암이 곱해진 만큼 조금 밝혀 원래 옷 색에 맞춘다
+static const float VILLAGER_CLOTH_GAIN   = 1.12f;
+
+static void LoadVillagerSprites()
+{
+	g_AnVilIdle      = g_Spr.FindAnim("villager.idle");
+	g_AnVilWalk      = g_Spr.FindAnim("villager.walk");
+	g_AnVilClothIdle = g_Spr.FindAnim("villager_cloth.idle");
+	g_AnVilClothWalk = g_Spr.FindAnim("villager_cloth.walk");
+	char nm[64];
+	for (int k = 0; k < LK_COUNT; ++k)
+	{
+		g_AnVilHat[k] = -1;
+		if (k == LK_VILLAGER) continue;
+		snprintf(nm, sizeof(nm), "villager_hat.%s", LOOK_IDS[k]);
+		g_AnVilHat[k] = g_Spr.FindAnim(nm);
+	}
+}
+
+static bool VillagerReady()
+{
+	return g_SprOk && g_AnVilIdle >= 0 && g_AnVilWalk >= 0 &&
+		g_AnVilClothIdle >= 0 && g_AnVilClothWalk >= 0;
+}
+
+static float Gain(float c)
+{
+	c *= VILLAGER_CLOTH_GAIN;
+	return c > 1.0f ? 1.0f : c;
+}
+
+// 몸 -> 옷 -> 모자 순으로 겹친다. 반환값은 그림 맨 위의 스크린 y (머리 위 표시용)
+static float DrawAgentSprite(const Agent& a, float sx, float sy)
+{
+	bool flip = false;
+	int dir = SpriteAtlas::SpriteDirFromWorld(a.faceX, a.faceY, &flip);
+	R->DrawShadow(sx, sy, 30.0f, 14.0f, 0.34f, 0.22f);
+
+	int body = a.walking ? g_AnVilWalk : g_AnVilIdle;
+	int cloth = a.walking ? g_AnVilClothWalk : g_AnVilClothIdle;
+	const SpriteAnim& an = g_Spr.Anim(body);
+	int k;
+	if (a.walking)
+	{
+		// 걷기 위상(라디안) 한 바퀴 = 걸음 한 주기. 발이 미끄러지지 않는다
+		float c = a.phase / (2.0f * PI);
+		k = (int)floorf((c - floorf(c)) * an.frames);
+	}
+	else
+	{
+		// 서 있을 때 위상은 초당 1.6 씩 는다. 개체마다 시작이 달라 숨이 겹치지 않는다
+		k = (int)floorf(a.phase / 1.6f * an.fps) % an.frames;
+	}
+	if (k < 0) k = 0;
+
+	const float s = VILLAGER_SPRITE_SCALE;
+	const SpriteFrame& fb = g_Spr.AnimFrameIndex(body, dir, k);
+	DrawSpr(fb, sx, sy, s, flip, Col(1.0f, 1.0f, 1.0f));
+	DrawSpr(g_Spr.AnimFrameIndex(cloth, dir, k), sx, sy, s, flip,
+		Col(Gain(a.cloth.r), Gain(a.cloth.g), Gain(a.cloth.b)));
+	float top = sy + fb.oy * s;
+
+	int hat = (a.look >= 0 && a.look < LK_COUNT) ? g_AnVilHat[a.look] : -1;
+	if (hat >= 0)
+	{
+		// 모자는 기본 자세로 한 장만 구웠다. 이 프레임의 머리가 기본 자세에서
+		// 움직인 만큼 옮겨 붙인다
+		const SpriteFrame& fh = g_Spr.AnimFrameIndex(hat, dir, 0);
+		float dx = (fb.ax - fh.ax) * s;
+		float dy = (fb.ay - fh.ay) * s;
+		if (flip) dx = -dx;
+		DrawSpr(fh, sx + dx, sy + dy, s, flip, Col(1.0f, 1.0f, 1.0f));
+		float ht = sy + dy + fh.oy * s;
+		if (ht < top) top = ht;
+	}
+	return top;
+}
+
 static void DrawAgent(const Agent& a, float sx, float sy)
 {
-	float faceY = a.faceY;
-	float bob = DrawPerson(sx, sy, a.cloth, a.phase, a.walking, a.faceX, faceY, a.flipX, false);
-
-	float flip = (a.flipX < -0.05f) ? -1.0f : 1.0f;
-	bool faceCam = (a.faceX + faceY) * 0.5f > -0.35f;
-	float top = sy - bob - 58.0f;
-	DrawLook(a.look, sx, top, flip, a.cloth, faceCam, sy - bob - 42.0f);
+	float top;
+	if (VillagerReady())
+	{
+		top = DrawAgentSprite(a, sx, sy) + 4.0f;
+	}
+	else
+	{
+		float faceY = a.faceY;
+		float bob = DrawPerson(sx, sy, a.cloth, a.phase, a.walking, a.faceX, faceY, a.flipX, false);
+		float flip = (a.flipX < -0.05f) ? -1.0f : 1.0f;
+		bool faceCam = (a.faceX + faceY) * 0.5f > -0.35f;
+		top = sy - bob - 58.0f;
+		DrawLook(a.look, sx, top, flip, a.cloth, faceCam, sy - bob - 42.0f);
+	}
 
 	float pdx = g_PlayerX - a.x, pdy = g_PlayerY - a.y;
 	float pd2 = pdx * pdx + pdy * pdy;

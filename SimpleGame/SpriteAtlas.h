@@ -23,6 +23,8 @@ struct SpriteFrame
 	float u0, v0, u1, v1;   // 아틀라스 UV (v 는 위가 0)
 	float w, h;             // 1배 px
 	float ox, oy;           // 피벗 기준 좌상단 오프셋 (1배 px)
+	float ax, ay;           // 앵커 (피벗 기준, 1배 px). 주민 몸은 머리, 모자는 모자 자리
+	bool  hasAnchor;        // 겹쳐 그리는 부품을 프레임마다 따라 옮길 때만 있다
 };
 
 struct SpriteAnim
@@ -40,6 +42,9 @@ enum SpriteDir
 	SDIR_S = 0, SDIR_SE, SDIR_E, SDIR_NE, SDIR_N,
 	SDIR_COUNT
 };
+
+class Renderer;
+struct Col;
 
 class SpriteAtlas
 {
@@ -87,3 +92,15 @@ private:
 	int         m_W, m_H;
 	std::string m_Error;
 };
+
+// ---- 게임 전체가 쓰는 아틀라스 하나 ----
+// Game::Init 이 읽어 GPU 에 올리고 SetReady 한다. Level1 은 읽기만 한다.
+// 실패하면 Ready 가 false 라 각 씬이 SDF 그림으로 그린다.
+SpriteAtlas& SharedSprites();
+bool SharedSpritesReady();
+void SetSharedSpritesReady(bool ready);
+
+// 프레임 한 장. (sx, sy) = 발(피벗)의 스크린 좌표, scale 은 1배 기준 배율.
+// flip 이면 피벗 기준 좌우 반전. 렌더 큐에 넣기만 한다 (GL 호출 없음)
+void DrawSpriteFrame(Renderer* r, const SpriteFrame& f, float sx, float sy, float scale,
+	bool flip, const Col& tint);

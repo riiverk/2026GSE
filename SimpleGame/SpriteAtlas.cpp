@@ -1,6 +1,7 @@
 ﻿// 스프라이트 아틀라스 로더. PCH 를 쓰지 않는다 (stb_image 구현을 품고 있어서).
 
 #include "SpriteAtlas.h"
+#include "Renderer.h"     // DrawSprite 선언만 쓴다 (GL 호출은 Renderer 안에서)
 
 #include <cmath>
 #include <cstring>
@@ -97,7 +98,8 @@ bool SpriteAtlas::Load(const char* txtPath)
 		}
 		else if (tag == "f")
 		{
-			// f <x> <y> <w> <h> <ox> <oy>   (아틀라스 px, 피벗 기준 좌상단 오프셋)
+			// f <x> <y> <w> <h> <ox> <oy> [<ax> <ay>]
+			//   아틀라스 px. (ox, oy) 피벗 기준 좌상단, (ax, ay) 피벗 기준 앵커 (선택)
 			if (expect <= 0 || aw <= 0)
 			{
 				std::ostringstream es;
@@ -116,6 +118,10 @@ bool SpriteAtlas::Load(const char* txtPath)
 			fr.h = h / curScale;
 			fr.ox = ox / curScale;
 			fr.oy = oy / curScale;
+			float ax = 0.0f, ay = 0.0f;
+			fr.hasAnchor = static_cast<bool>(ss >> ax >> ay);
+			fr.ax = fr.hasAnchor ? ax / curScale : 0.0f;
+			fr.ay = fr.hasAnchor ? ay / curScale : 0.0f;
 			m_Frames.push_back(fr);
 			--expect;
 		}
@@ -214,4 +220,40 @@ int SpriteAtlas::SpriteDirFromWorld(float fx, float fy, bool* flip)
 	case 2:  *flip = true; return SDIR_SE;   // sw
 	default: return SDIR_S;
 	}
+}
+
+// ---- 공용 아틀라스 ----
+
+SpriteAtlas& SharedSprites()
+{
+	static SpriteAtlas s_Atlas;
+	return s_Atlas;
+}
+
+static bool s_SharedReady = false;
+
+bool SharedSpritesReady()
+{
+	return s_SharedReady;
+}
+
+void SetSharedSpritesReady(bool ready)
+{
+	s_SharedReady = ready;
+}
+
+void DrawSpriteFrame(Renderer* r, const SpriteFrame& f, float sx, float sy, float scale,
+	bool flip, const Col& tint)
+{
+	float w = f.w * scale;
+	float h = f.h * scale;
+	float left = flip ? sx - (f.ox + f.w) * scale : sx + f.ox * scale;
+	float top  = sy + f.oy * scale;
+	float uv[4] = { f.u0, f.v0, f.u1, f.v1 };
+	if (flip)
+	{
+		uv[0] = f.u1;
+		uv[2] = f.u0;
+	}
+	r->DrawSprite(left + w * 0.5f, top + h * 0.5f, w, h, uv, tint);
 }
