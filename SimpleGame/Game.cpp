@@ -291,6 +291,7 @@ static void DrawSpr(const SpriteFrame& f, float sx, float sy, float scale, bool 
 
 static void LoadSprites()
 {
+	PROFILE_SCOPE("render.sprite_load");
 	g_SprOk = false;
 	if (!USE_BLENDER_SPRITES || R == 0) return;
 
@@ -1967,6 +1968,7 @@ static void PollNotices(float dt)
 // 타르투: 리노 등 뒤 한 걸음 자리를 쫓는다. 멀어지면 빨리, 가까우면 선다.
 static void UpdateTartu(float dt)
 {
+	PROFILE_SCOPE("tutorial.companion");
 	float bx = g_PlayerX - g_FaceX * TARTU_FOLLOW_DIST;
 	float by = g_PlayerY - g_FaceY * TARTU_FOLLOW_DIST;
 	float dx = bx - g_TartuX;
@@ -2008,6 +2010,7 @@ static void UpdateTartu(float dt)
 static void UpdateSpriteFx(float dt)
 {
 	if (!g_SprOk) return;
+	PROFILE_SCOPE("tutorial.sprite_fx");
 
 	if (g_GratAnimT >= 0.0f)
 	{

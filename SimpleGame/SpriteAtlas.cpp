@@ -1,4 +1,4 @@
-// 스프라이트 아틀라스 로더. PCH 를 쓰지 않는다 (stb_image 구현을 품고 있어서).
+﻿// 스프라이트 아틀라스 로더. PCH 를 쓰지 않는다 (stb_image 구현을 품고 있어서).
 
 #include "SpriteAtlas.h"
 

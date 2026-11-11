@@ -138,6 +138,7 @@
 | `render.flush.frame_end` | counter | 프레임 끝 (FinishFrame) | 정상 1 |
 | `render.flush.static_batch` | counter | 정적 배치 앞에서 큐를 비운 횟수 | 0 이 정상. 늘면 정적 배치 사이에 동적 도형이 끼었다 |
 | `render.flush.capacity` | counter | 큐가 65,536 을 넘어 중간에 비움 | 0 이 정상 |
+| `render.sprite_load` | scope | 스프라이트 목록 파싱 + PNG 디코드 + 업로드 (시작 시 1회) | 수백 ms 면 PNG 가 너무 크다 |
 | `render.sprite_atlas_mb` | gauge | 블렌더 스프라이트 아틀라스 GPU 메모리 (밉맵 포함 추정, 시작 시 1회) | 4096x1024 기준 약 21 MB. 64 MB 를 넘기면 아틀라스를 지역별로 나눈다 |
 | `render.flush.terrain` | counter | 지형 앞에서 큐를 비운 횟수 | 0 이 정상 (지형은 프레임 맨 처음) |
 | `render.terrain` | scope | 곡선 지형 그리기 제출 (CPU 쪽). GPU 비용은 `gpu.scene_ms` 에 포함 | |
@@ -193,6 +194,8 @@
 |---|---|---|---|
 | `tutorial.update` / `tutorial.render` | scope | 마을 갱신 / 그리기 (SimpleGame.cpp) | |
 | `tutorial.npc` | scope | 주민 에이전트 갱신 (일과 이동, 행동, 말풍선) | > 2 ms 면 행동 로직이나 길찾기 |
+| `tutorial.companion` | scope | 타르투(동행) 따라가기 갱신 | 0.05 ms 를 넘을 일이 없다 |
+| `tutorial.sprite_fx` | scope | 감사 의례·포획 연출 타이머 갱신 | 연출 수만큼 선형 |
 | `tutorial.path` | scope | A* 길찾기 1회. 프레임당 최대 3회 (`PATH_BUDGET`) | 새벽·저녁 전환 때만 몰려야 정상 |
 | `tutorial.path_nodes` | counter | 그 프레임 A* 가 연 칸 수 | 평소에도 수천이면 목표가 막힌 곳 (경로 실패 반복) |
 | `tutorial.npcs_present` / `monsters_alive` / `drawn_entities` | gauge | 보이는 주민 / 살아 있는 잡몹 / 그린 개체 | monsters_alive 가 계속 줄면 재출현이 안 되고 있다 |

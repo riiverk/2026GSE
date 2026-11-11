@@ -129,9 +129,11 @@
 - `Game.cpp` 의 `USE_BLENDER_SPRITES` 를 false 로 두면 예전 SDF 그림으로 돌아간다. 아틀라스를 못 읽어도 자동으로 SDF
 - 새 에셋: 스크립트 작성 → 렌더 → `pack_atlas.py` → `Data/Sprites` 갱신 → `Game.cpp` 에서 `FindAnim/FindSprite`
 
-### 버전 관리 미설정
+### 버전 관리
 
-`.git`이 없고, ignore 파일이 `.gitignore`가 아닌 `gitignore`(점 없음)로 되어 있어 git이 인식하지 못한다. git 도입 시 리네임 선행.
+- 원격 저장소: `https://github.com/riiverk/2026GSE` (`main`). 저장소 루트는 `SimpleGame` 의 상위 폴더
+- 작업 중간중간 적절한 커밋 메시지로 커밋·푸시한다. 푸시가 안 되면 사용자에게 방법을 묻고, 정해지면 작업을 이어 간다
+- 커밋하지 않는 것: `x64/`, `.vs/`, `Logs/`, `Art/renders/`, `Art/preview/` (`.gitignore`). `Debug/`·`Release/` 의 DLL 두 개만 예외로 추적
 
 ### 렌더링 구조 요약
 
