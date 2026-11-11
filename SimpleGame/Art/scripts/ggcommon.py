@@ -468,8 +468,9 @@ def proc_mat(name, base, base2=None, var_scale=4.0, var_amt=0.0,
 		grad_z=None, sss=0.0, sss_radius=(0.3, 0.12, 0.08), coat=0.0, coat_rough=0.1,
 		sheen=0.0, metallic=0.0, emission=None, spec=0.5, bump_strength=0.25,
 		normal_strength=1.0, height_scale=0.012, tint_bottom=None, transmission=0.0,
-		alpha=1.0, var_edge=(0.35, 0.65)):
-	"""프로시저럴 소스 머티리얼. 스칼라 속성은 MAT_SPECS 에 남겨 최종 머티리얼이 쓴다."""
+		alpha=1.0, var_edge=(0.35, 0.65), top=None):
+	"""프로시저럴 소스 머티리얼. 스칼라 속성은 MAT_SPECS 에 남겨 최종 머티리얼이 쓴다.
+	top = (z0, z1, color): 오브젝트 Z 가 z0 -> z1 로 갈수록 color 로 바뀐다 (등/배 두 색)"""
 	if metallic < 0.5:
 		rough, spec, coat, sheen = _matte(rough, spec, coat, sheen)
 	m = bpy.data.materials.new(name)
@@ -592,6 +593,20 @@ def proc_mat(name, base, base2=None, var_scale=4.0, var_amt=0.0,
 			pass
 		nt.links.new(cg.outputs[0], mul.inputs['B'])
 		col = mul.outputs['Result']
+
+	if top is not None:
+		sep2 = _n(nt, 'ShaderNodeSeparateXYZ', -600, 1100)
+		nt.links.new(coord, sep2.inputs[0])
+		tr = _n(nt, 'ShaderNodeMapRange', -400, 1100)
+		tr.inputs['From Min'].default_value = top[0]
+		tr.inputs['From Max'].default_value = top[1]
+		nt.links.new(sep2.outputs['Z'], tr.inputs['Value'])
+		tm = _n(nt, 'ShaderNodeMix', 0, 1100)
+		tm.data_type = 'RGBA'
+		nt.links.new(tr.outputs['Result'], tm.inputs['Factor'])
+		nt.links.new(col, tm.inputs['A'])
+		tm.inputs['B'].default_value = (*top[2], 1.0)
+		col = tm.outputs['Result']
 
 	if cavity > 0.0 and macro is not None:
 		cr = _n(nt, 'ShaderNodeMapRange', 100, 450)

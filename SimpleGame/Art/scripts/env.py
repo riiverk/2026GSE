@@ -84,8 +84,10 @@ def model_preview(name, canvas=(512, 512), pivot=(256, 400), scale=4):
 # =============================================================================
 # 집
 # =============================================================================
-def build_house():
+def build_house(roof_mat=None):
+	# roof_mat: 지붕·굴뚝 갓을 다른 재질로 (영주 저택의 검은 슬레이트)
 	M = mats_common()
+	ROOF = roof_mat or M['terracotta']
 	SHUT = G.proc_mat('house_shutter', lin((0.55, 0.60, 0.74)), lin((0.48, 0.52, 0.66)),
 		var_scale=6, var_amt=0.5, rough=0.6, macro=('wave', 40.0, 0.5, 'X'), macro_amt=0.8,
 		cavity=0.3, normal_strength=0.8, micro=('noise', 160.0), bump_strength=0.15,
@@ -139,7 +141,7 @@ def build_house():
 		cy = sy * (D / 2 + eave) / 2
 		slab = G.box('h_roofslab', (W + 0.22, slope_len, 0.05),
 			(0, cy, HW + 0.10 + ridge_h / 2 + 0.02), (math.degrees(ang) * -sy, 0, 0))
-		add(slab, M['terracotta'])
+		add(slab, ROOF)
 		n_tiles = 13
 		for i in range(n_tiles):
 			x = -((W + 0.18) / 2) + (i + 0.5) * (W + 0.18) / n_tiles
@@ -151,11 +153,11 @@ def build_house():
 			t.location = (x + random.uniform(-0.006, 0.006), cy,
 				HW + 0.10 + ridge_h / 2 + 0.05)
 			G.bake_transform(t)
-			add(t, M['terracotta'])
+			add(t, ROOF)
 	# 용마루
 	ridge = G.cylinder('h_ridge', 0.065, 0.065, W + 0.26, (0, 0, HW + 0.10 + ridge_h + 0.03),
 		(0, 90, 0), seg=16)
-	add(ridge, M['terracotta'])
+	add(ridge, ROOF)
 
 	# 굴뚝
 	ch = G.box('h_chimney', (0.20, 0.20, 0.55), (-0.32, 0.20, HW + 0.10 + 0.50))
@@ -163,7 +165,7 @@ def build_house():
 	add(ch, M['stone'])
 	cap = G.box('h_chimcap', (0.27, 0.27, 0.05), (-0.32, 0.20, HW + 0.10 + 0.80))
 	G.bevel(cap, 0.02, 2)
-	add(cap, M['terracotta'])
+	add(cap, ROOF)
 
 	# 문 (-Y 면, 왼쪽 앞) — 아치형 나무 문 + 돌 계단
 	dx = 0.22

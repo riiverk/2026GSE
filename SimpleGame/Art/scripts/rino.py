@@ -406,6 +406,29 @@ for ob in (belt, buckle, sheath, knife):
 for fp in face_parts:
 	G.skin(fp, arm, only='head')
 
+# ---- 사냥용 큰 국자 (레벨 1). 오른손에 쥔다. 평소 스프라이트에서는 숨긴다 ----
+STEEL = G.simple_mat('rino_steel', lin((0.80, 0.82, 0.86)), rough=0.25, metallic=1.0)
+GRIP = (-0.252, -0.030, 0.452)
+hunt_handle = G.cylinder('rino_hl_handle', 0.017, 0.014, 0.54, (GRIP[0], GRIP[1], GRIP[2] - 0.23), seg=12)
+hunt_cap = G.sphere('rino_hl_cap', 0.024, (GRIP[0], GRIP[1], GRIP[2] + 0.045))
+bowl_c = Vector((GRIP[0], GRIP[1] - 0.075, GRIP[2] - 0.54))
+hunt_bowl = G.lathe('rino_hl_bowl', [(0.0, -0.085), (0.048, -0.075), (0.075, -0.048), (0.087, -0.014),
+	(0.090, 0.0), (0.082, 0.0), (0.077, -0.011), (0.066, -0.038), (0.041, -0.063), (0.0, -0.071)],
+	seg=28, close_bottom=False)
+# 입구가 앞(-Y)을 보게 눕힌다
+hunt_bowl.rotation_euler = (math.radians(-90), 0, 0)
+hunt_bowl.location = bowl_c
+G.bake_transform(hunt_bowl)
+hunt_neck = G.cylinder('rino_hl_neck', 0.013, 0.013, 0.09, tuple(bowl_c + Vector((0, 0.04, 0.06))),
+	(-40, 0, 0), seg=10)
+hunt = [hunt_handle, hunt_cap, hunt_bowl, hunt_neck]
+for o in hunt:
+	o.data.materials.append(STEEL)
+	G.skin(o, arm, only='hand.R')
+hunt_ladle = G.join(hunt, 'Rino_HuntLadle')
+G.bind(hunt_ladle, arm)
+hunt_ladle.hide_render = True
+
 rino = G.join([body, arms, shins, boots, head, hair, apron, pocket, ladle_h, ladle_b, neck_strap,
 	waist, scarf, belt, buckle, sheath, knife] + cuffs + knee_bands, 'Rino')
 face = G.join(face_parts, 'Rino_Face')
@@ -425,7 +448,7 @@ def idle(t):
 	return b
 
 
-IDLE = G.anim_fn(arm, 'rino_idle', 1, 25, 2, {
+IDLE_FNS = {
 	'hips': lambda t: dict(loc=(0, -0.004 * (0.5 - 0.5 * cos(t * TAU)), 0)),
 	'spine': lambda t: dict(rot=(1.2 * sin(t * TAU), 0, 0)),
 	'chest': lambda t: dict(rot=(-1.5 * sin(t * TAU), 0, 0), scale=(1 + 0.012 * sin(t * TAU),) * 3),
@@ -434,7 +457,8 @@ IDLE = G.anim_fn(arm, 'rino_idle', 1, 25, 2, {
 	'upper_arm.R': lambda t: dict(rot=(2.5 * sin(t * TAU), 0, 2 + 1.5 * sin(t * TAU))),
 	'forearm.L': lambda t: dict(rot=(-8 - 3 * sin(t * TAU), 0, 0)),
 	'forearm.R': lambda t: dict(rot=(-8 - 3 * sin(t * TAU), 0, 0)),
-})
+}
+IDLE = G.anim_fn(arm, 'rino_idle', 1, 25, 2, IDLE_FNS)
 
 STRIDE = 0.075
 LIFT = 0.055
@@ -449,7 +473,7 @@ def foot_fn(ph):
 	return f
 
 
-WALK = G.anim_fn(arm, 'rino_walk', 1, 17, 1, {
+WALK_FNS = {
 	'ik_foot.L': foot_fn(0.0),
 	'ik_foot.R': foot_fn(math.pi),
 	'hips': lambda t: dict(loc=(0, -0.018 + 0.016 * abs(sin(t * TAU)), 0),
@@ -461,7 +485,8 @@ WALK = G.anim_fn(arm, 'rino_walk', 1, 17, 1, {
 	'upper_arm.R': lambda t: dict(rot=(-30 * cos(t * TAU), 0, 4)),
 	'forearm.L': lambda t: dict(rot=(-18 - 14 * max(0, -cos(t * TAU)), 0, 0)),
 	'forearm.R': lambda t: dict(rot=(-18 - 14 * max(0, cos(t * TAU)), 0, 0)),
-})
+}
+WALK = G.anim_fn(arm, 'rino_walk', 1, 17, 1, WALK_FNS)
 
 
 # ---- 감사 의례: 두 손을 가슴 앞에 모으고 고개 숙여 절한다 ----
@@ -536,7 +561,55 @@ GRAT = G.anim_fn(arm, 'rino_gratitude', 1, 33, 1, {
 	'head': lambda t: dict(rot=(10 * grat(t)[1] - 4 * grat(t)[0] * (1 - grat(t)[1]), 0, 0)),
 })
 
-for a in (IDLE, WALK, GRAT):
+# ---- 레벨 1: 국자를 든 idle / walk + 내려치기 ----
+# 국자를 칼처럼 비껴 든다: 손목을 앞으로 꺾어 국자 머리가 앞쪽 아래에 온다
+HOLD_R = dict(rot=(-38, 0, 8))
+IDLE_L = G.anim_fn(arm, 'rino_idle_ladle', 1, 25, 2, dict(IDLE_FNS, **{
+	'hand.R': lambda t: HOLD_R,
+	'upper_arm.R': lambda t: dict(rot=(-12 + 2.5 * sin(t * TAU), 0, 6)),
+	'forearm.R': lambda t: dict(rot=(-22, 0, 0)),
+}))
+WALK_L = G.anim_fn(arm, 'rino_walk_ladle', 1, 17, 1, dict(WALK_FNS, **{
+	'hand.R': lambda t: HOLD_R,
+	'upper_arm.R': lambda t: dict(rot=(-12 - 10 * cos(t * TAU), 0, 6)),
+	'forearm.R': lambda t: dict(rot=(-26, 0, 0)),
+}))
+
+
+def atk(t):
+	"""Level1.cpp 의 LADLE_T_* 구간과 맞춘다: 0~0.36 들어올림, ~0.54 내려침,
+	~0.68 찍은 채 멈춤, ~1 복귀. 반환 (치켜든 정도 0..1, 내려친 정도 0..1)."""
+	if t < 0.36:
+		return ease(t / 0.36), 0.0
+	if t < 0.54:
+		k = (t - 0.36) / 0.18
+		return 1.0 - k * k, k * k
+	if t < 0.68:
+		return 0.0, 1.0
+	k = ease((t - 0.68) / 0.32)
+	return 0.0, 1.0 - k
+
+
+def atk_arm(t):
+	r, s_ = atk(t)
+	# 평소(-12) -> 머리 위(-175) -> 앞 아래로 내려침(-70)
+	return dict(rot=(-12 + (-163) * r + (-58) * s_ * (1 - r), 0, 6 - 10 * r))
+
+
+ATTACK = G.anim_fn(arm, 'rino_attack', 1, 33, 1, {
+	'upper_arm.R': atk_arm,
+	'forearm.R': lambda t: dict(rot=(-22 + 12 * atk(t)[0] + 10 * atk(t)[1], 0, 0)),
+	'hand.R': lambda t: dict(rot=(-38 + 20 * atk(t)[0] + 8 * atk(t)[1], 0, 8)),
+	'upper_arm.L': lambda t: dict(rot=(10 * atk(t)[0] - 18 * atk(t)[1], 0, -10 * atk(t)[0])),
+	'forearm.L': lambda t: dict(rot=(-20, 0, 0)),
+	'spine': lambda t: dict(rot=(-6 * atk(t)[0] + 10 * atk(t)[1], 0, 0)),
+	'chest': lambda t: dict(rot=(-5 * atk(t)[0] + 8 * atk(t)[1], -10 * atk(t)[0] + 6 * atk(t)[1], 0)),
+	'head': lambda t: dict(rot=(-4 * atk(t)[0] + 6 * atk(t)[1], 0, 0)),
+	'hips': lambda t: dict(loc=(0, -0.015 * atk(t)[1], 0)),
+	'ik_foot.L': lambda t: dict(loc=(0, 0, 0.05 * atk(t)[1])),
+})
+
+for a in (IDLE, WALK, GRAT, IDLE_L, WALK_L, ATTACK):
 	a.use_fake_user = True
 G.use_action(arm, IDLE)
 arm.animation_data.action = None
@@ -552,7 +625,8 @@ G.bake_asset_textures(rino, 'rino', res=1024)
 if STAGE == 'anim':
 	# 애니메이션 검수: 정면 근접, 각 액션 몇 프레임
 	G.iso_camera(160, 200, 80, 180, scale=2.4)
-	for act, frames in ((WALK, (1, 5, 9, 13)), (GRAT, (1, 9, 17, 25)), (IDLE, (1, 13))):
+	hunt_ladle.hide_render = False
+	for act, frames in ((ATTACK, (1, 9, 13, 17, 21, 29)), (WALK_L, (1, 9)), (IDLE_L, (1,))):
 		G.use_action(arm, act)
 		for f in frames:
 			bpy.context.scene.frame_set(f)
@@ -569,6 +643,13 @@ anims = [
 ]
 G.use_action(arm, IDLE)
 meta = G.render_character(arm, arm, 'rino', (128, 176), (64, 160), anims)
+hunt_ladle.hide_render = False
+G.render_character(arm, arm, 'rino_ladle', (176, 200), (88, 170), [
+	('idle', IDLE_L, [1, 5, 9, 13, 17, 21], 6, 1),
+	('walk', WALK_L, [1, 3, 5, 7, 9, 11, 13, 15], 12, 1),
+	('attack', ATTACK, [1, 5, 9, 13, 17, 21, 25, 29], 8, 0),
+])
+hunt_ladle.hide_render = True
 arm.animation_data.action = IDLE
 G.save_blend('rino')
 print('[rino] done')

@@ -24,8 +24,9 @@ ATLAS_W = 4096
 DIRS = ['s', 'se', 'e', 'ne', 'n']
 
 # 아틀라스에 넣는 순서 (sprites.txt 순서). 엔진은 이름으로 찾으므로 순서는 자유
-ORDER = ['rino', 'tartu', 'tomatoma', 'potato', 'bean', 'mush', 'lakedeer', 'house', 'tree',
-	'pot', 'dish', 'props']
+ORDER = ['rino', 'rino_ladle', 'tartu', 'tomatoma', 'potato', 'bean', 'mush', 'boar', 'lakedeer',
+	'villager', 'villager_cloth', 'villager_hat', 'house', 'landmarks', 'tree', 'pot', 'dish',
+	'items', 'props']
 
 
 def load(path):
@@ -68,9 +69,13 @@ for asset in ORDER:
 		pivot = meta['pivot']
 		for an in meta['anims']:
 			fl = []
-			for dn in DIRS:
+			anchors = an.get('anchors')
+			for di, dn in enumerate(DIRS):
 				for fi in range(an['frames']):
-					fl.append(add_frame(d, '%s.%s.%s.%d' % (asset, an['name'], dn, fi), pivot))
+					fr = add_frame(d, '%s.%s.%s.%d' % (asset, an['name'], dn, fi), pivot)
+					if anchors:
+						fr['anchor'] = anchors[di * an['frames'] + fi]
+					fl.append(fr)
 			blocks.append(('anim', ('%s.%s' % (asset, an['name']), len(DIRS), an['frames'],
 				an['fps'], 1 if an['loop'] else 0, scale), fl))
 	else:
@@ -78,27 +83,71 @@ for asset in ORDER:
 			fr = add_frame(d, st['name'], st['pivot'])
 			blocks.append(('sprite', (st['name'], scale), [fr]))
 
-# ---- 선반(shelf) 패킹: 높이순 ----
-order = sorted(range(len(frames)), key=lambda i: (-frames[i]['h'], -frames[i]['w']))
-x = PAD; y = PAD; shelf_h = 0
-for i in order:
-	f = frames[i]
-	if x + f['w'] + PAD > ATLAS_W:
-		x = PAD
-		y += shelf_h + PAD
-		shelf_h = 0
-	f['x'] = x; f['y'] = y
-	x += f['w'] + PAD
-	shelf_h = max(shelf_h, f['h'])
-used_h = y + shelf_h + PAD
-H = 256
-while H < used_h:
-	H *= 2
+# ---- MaxRects 패킹 (가장 짧은 변 맞춤) ----
+# 선반 패킹은 채움률이 55% 남짓이라 4096x4096 이 필요했다. MaxRects 는 80% 안팎이라
+# 세로를 필요한 만큼만 (16 의 배수) 잡는다. GL 은 2의 거듭제곱이 아닌 텍스처도 밉맵된다.
 W = ATLAS_W
-# 가로를 다 쓰지 않으면 줄인다
-max_x = max(f['x'] + f['w'] for f in frames) + PAD
-while W // 2 >= max_x and W > 256:
-	W //= 2
+
+
+def pack(height):
+	free = [(0, 0, W, height)]
+	place = {}
+	order = sorted(range(len(frames)), key=lambda i: -(max(frames[i]['w'], frames[i]['h']) * 4096
+		+ min(frames[i]['w'], frames[i]['h'])))
+	for i in order:
+		fw = frames[i]['w'] + PAD
+		fh = frames[i]['h'] + PAD
+		best = None
+		for (fx, fy, fW, fH) in free:
+			if fw <= fW and fh <= fH:
+				short = min(fW - fw, fH - fh)
+				key = (fy + fh, short, fx)       # 위쪽부터 채운다 -> 아래가 비어 세로를 줄일 수 있다
+				if best is None or key < best[0]:
+					best = (key, fx, fy)
+		if best is None:
+			return None
+		_, px, py = best
+		place[i] = (px, py)
+		# 겹치는 빈 사각형을 쪼갠다
+		nf = []
+		for (fx, fy, fW, fH) in free:
+			if px >= fx + fW or px + fw <= fx or py >= fy + fH or py + fh <= fy:
+				nf.append((fx, fy, fW, fH))
+				continue
+			if px > fx:
+				nf.append((fx, fy, px - fx, fH))
+			if px + fw < fx + fW:
+				nf.append((px + fw, fy, fx + fW - (px + fw), fH))
+			if py > fy:
+				nf.append((fx, fy, fW, py - fy))
+			if py + fh < fy + fH:
+				nf.append((fx, py + fh, fW, fy + fH - (py + fh)))
+		# 다른 사각형에 완전히 들어가는 것은 버린다
+		nf.sort(key=lambda r: -r[2] * r[3])
+		kept = []
+		for r in nf:
+			if r[2] <= 0 or r[3] <= 0:
+				continue
+			if any(r[0] >= k[0] and r[1] >= k[1] and r[0] + r[2] <= k[0] + k[2] and r[1] + r[3] <= k[1] + k[3]
+					for k in kept):
+				continue
+			kept.append(r)
+		free = kept
+	return place
+
+
+area = sum((f['w'] + PAD) * (f['h'] + PAD) for f in frames)
+H = max(256, int(area / W / 0.92) // 16 * 16)
+while True:
+	pl = pack(H - PAD)
+	if pl is not None:
+		break
+	H += 64
+for i, (px, py) in pl.items():
+	frames[i]['x'] = px + PAD
+	frames[i]['y'] = py + PAD
+used = max(f['y'] + f['h'] for f in frames) + PAD
+H = (used + 15) // 16 * 16
 
 col = np.zeros((H, W, 4), np.uint8)
 nrm = np.zeros((H, W, 4), np.uint8)
@@ -142,6 +191,7 @@ with open(os.path.join(OUT, 'sprites.txt'), 'w', encoding='utf-8', newline='\n')
 	fo.write('# sprite <name> <scale>                                 그 뒤 f 줄 하나\n')
 	fo.write('# f      <x> <y> <w> <h> <ox> <oy>   아틀라스 px. (ox, oy) = 피벗(발) 기준 좌상단\n')
 	fo.write('#        scale 로 나누면 게임 1배 px\n')
+	fo.write('#        뒤에 <ax> <ay> 가 붙으면 피벗 기준 앵커 (주민 몸 = 머리, 모자 = 모자 자리)\n')
 	fo.write('atlas sprites.png %d %d\n' % (W, H))
 	for kind, hdr, fl in blocks:
 		if kind == 'anim':
@@ -149,7 +199,10 @@ with open(os.path.join(OUT, 'sprites.txt'), 'w', encoding='utf-8', newline='\n')
 		else:
 			fo.write('sprite %s %d\n' % hdr)
 		for f in fl:
-			fo.write('f %d %d %d %d %d %d\n' % (f['x'], f['y'], f['w'], f['h'], f['ox'], f['oy']))
+			fo.write('f %d %d %d %d %d %d' % (f['x'], f['y'], f['w'], f['h'], f['ox'], f['oy']))
+			if 'anchor' in f:
+				fo.write(' %d %d' % (round(f['anchor'][0]), round(f['anchor'][1])))
+			fo.write('\n')
 
 print('atlas %dx%d, %d frames, %d blocks, fill %.0f%%' % (W, H, len(frames), len(blocks),
 	100.0 * sum(f['w'] * f['h'] for f in frames) / (W * H)))
