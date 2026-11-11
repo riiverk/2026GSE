@@ -11,3 +11,20 @@ Release/
 *.sln.docstates
 *.vsidx
 *.ipch
+
+# 빌드 산출물 (구 gitignore 에서 합침)
+*.exe
+*.ilk
+*.pdb
+*.obj
+*.log
+*.pch
+*.idb
+*.tlog
+*.lastbuildstate
+*.db
+
+# 런타임 로그·아트 재생성 중간물
+Logs/
+SimpleGame/Art/renders/
+SimpleGame/Art/preview/
